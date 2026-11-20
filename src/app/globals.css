@@ -1,26 +1,66 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+@theme {
+  --color-paper: #ffffff;
+  --color-ivory: #f6f3ee;
+  --color-sand: #e9e3d8;
+  --color-stone: #efeeeb;
+  --color-line: #e3dfd7;
+  --color-ink: #17171a;
+  --color-muted: #6b6862;
+  --color-accent: #8a7a63;
+  --font-sans: var(--font-frma), ui-sans-serif, system-ui, sans-serif;
+  --tracking-label: 0.16em;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+html {
+  -webkit-text-size-adjust: 100%;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--color-paper);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  font-feature-settings: "ss01", "cv11";
+}
+
+@layer components {
+  .container-frma {
+    @apply mx-auto w-full max-w-[1320px] px-4 sm:px-6 lg:px-10;
+  }
+  .eyebrow {
+    @apply text-[11px] font-medium uppercase tracking-[0.18em] text-muted;
+  }
+  .display {
+    @apply text-4xl font-light leading-[1.05] tracking-[-0.02em] sm:text-5xl lg:text-6xl;
+  }
+  .h2 {
+    @apply text-2xl font-light tracking-[-0.01em] sm:text-3xl;
+  }
+  .btn-primary {
+    @apply inline-flex min-h-12 items-center justify-center bg-ink px-6 text-sm font-medium tracking-wide text-paper transition-colors hover:bg-black disabled:cursor-not-allowed disabled:bg-muted/50;
+  }
+  .btn-secondary {
+    @apply inline-flex min-h-12 items-center justify-center border border-ink bg-transparent px-6 text-sm font-medium tracking-wide text-ink transition-colors hover:bg-ink hover:text-paper;
+  }
+  .btn-ghost {
+    @apply inline-flex min-h-12 items-center justify-center px-4 text-sm text-muted underline-offset-4 hover:text-ink hover:underline;
+  }
+  .link-underline {
+    @apply underline decoration-ink/30 underline-offset-4 transition-colors hover:decoration-ink;
+  }
+  .field {
+    @apply block min-h-12 w-full border border-line bg-paper px-4 text-base outline-none transition-colors placeholder:text-muted/70 focus:border-ink;
+  }
+  .chip {
+    @apply inline-flex min-h-10 items-center border border-line px-4 text-sm transition-colors hover:border-ink;
+  }
+  .chip-active {
+    @apply border-ink bg-ink text-paper;
+  }
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-ink);
+  outline-offset: 2px;
 }
