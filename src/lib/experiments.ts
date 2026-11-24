@@ -1,5 +1,4 @@
 import { ACTIVE_EXPERIMENTS, type Experiment, type Variant } from "@/config/experiments";
-import { PRICES, type PricedId } from "@/config/pricing";
 import { readJSON, writeJSON } from "./storage";
 
 const KEY = "frma_exp";
@@ -44,7 +43,8 @@ export function getVariant(exp: Experiment, assignments: Assignments): Variant |
 
 /** Precio final considerando experimentos de precio activos. */
 export function resolvePrice(
-  id: PricedId,
+  id: string,
+  base: number,
   assignments: Assignments,
   experiments: Experiment[] = ACTIVE_EXPERIMENTS,
 ): number {
@@ -53,15 +53,18 @@ export function resolvePrice(
     const override = getVariant(exp, assignments)?.prices?.[id];
     if (typeof override === "number") return override;
   }
-  return PRICES[id];
+  return base;
 }
 
 /** Parámetros para adjuntar a cada evento de analítica. */
 export function experimentParams(assignments: Assignments): Record<string, string> {
   const ids = Object.keys(assignments);
   if (ids.length === 0) return {};
+  const variants = ids.map((id) => assignments[id]).join(",");
   return {
     experiment_id: ids.join(","),
-    variant_id: ids.map((id) => assignments[id]).join(","),
+    variant_id: variants,
+    // Copia sin ambigüedad: en select_color, variant_id es el SKU del color.
+    experiment_variant_id: variants,
   };
 }

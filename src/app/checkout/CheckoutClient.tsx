@@ -5,16 +5,18 @@ import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { SITE } from "@/config/site";
 import { subtotal } from "@/lib/cart/cart";
-import { lineItem } from "@/lib/cart/actions";
+import { lineAnalyticsItem, lineInfo } from "@/lib/cart/lines";
+import { useCatalog } from "@/lib/catalog/context";
+import type { AnalyticsItem } from "@/lib/analytics/items";
 import { track } from "@/lib/analytics/track";
 import { formatCLP } from "@/lib/format";
-import { useCart, useCartReady, usePriceFn } from "@/lib/hooks";
-import { lineInfo } from "@/components/cart/lineInfo";
+import { useCart, useCartReady, useLinePrice } from "@/lib/hooks";
 
 export function CheckoutClient() {
   const lines = useCart();
   const ready = useCartReady();
-  const priceOf = usePriceFn();
+  const catalog = useCatalog();
+  const priceOf = useLinePrice();
   const router = useRouter();
   const started = useRef(false);
   const [sending, setSending] = useState(false);
@@ -22,8 +24,8 @@ export function CheckoutClient() {
   useEffect(() => {
     if (!ready || !priceOf || started.current || lines.length === 0) return;
     started.current = true;
-    track("begin_checkout", { items: lines.map((l) => lineItem(l, priceOf(l.id))) });
-  }, [ready, priceOf, lines]);
+    track("begin_checkout", { items: lines.map((l) => lineAnalyticsItem(l, catalog, priceOf(l))).filter((x): x is AnalyticsItem => x !== null) });
+    }, [ready, priceOf, lines, catalog]); // el ref evita repetir el evento
 
   if (!ready || !priceOf) return <div className="container-frma min-h-[50vh] pt-14" />;
 
@@ -41,7 +43,7 @@ export function CheckoutClient() {
   const onContinue = () => {
     if (sending) return;
     setSending(true);
-    const items = lines.map((l) => lineItem(l, priceOf(l.id)));
+    const items = lines.map((l) => lineAnalyticsItem(l, catalog, priceOf(l))).filter((x): x is AnalyticsItem => x !== null);
     // Evento final del embudo: intención de compra (NO es una compra).
     track("purchase_intent", { items, value: total });
     const interest = [...new Set(lines.map((l) => l.id))].join(",");
@@ -57,7 +59,8 @@ export function CheckoutClient() {
         <section aria-label="Productos">
           <ul className="divide-y divide-line border-y border-line">
             {lines.map((l) => {
-              const info = lineInfo(l);
+              const info = lineInfo(l, catalog);
+              if (!info) return null;
               return (
                 <li key={l.key} className="flex justify-between gap-4 py-4 text-sm">
                   <div>
@@ -66,7 +69,7 @@ export function CheckoutClient() {
                     </p>
                     <p className="mt-1 text-muted">{info.detail}</p>
                   </div>
-                  <p className="tabular-nums">{formatCLP(priceOf(l.id) * l.quantity)}</p>
+                  <p className="tabular-nums">{formatCLP(priceOf(l) * l.quantity)}</p>
                 </li>
               );
             })}

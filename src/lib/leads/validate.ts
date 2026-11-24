@@ -1,14 +1,8 @@
 /**
  * Validación de leads (se usa en el servidor; también exportada para tests).
  */
-import { CAPSULE, PRODUCTS } from "@/config/catalog";
-
-export const INTEREST_OPTIONS = [
-  { id: "general", label: "Todo FRMA" },
-  { id: CAPSULE.id, label: CAPSULE.name },
-  ...PRODUCTS.map((p) => ({ id: p.id, label: p.name })),
-];
-const INTEREST_IDS = new Set(INTEREST_OPTIONS.map((o) => o.id));
+/** id de producto/guardarropa: minúsculas, números y guiones (ver /admin). */
+const INTEREST_RE = /^[a-z0-9]+(-[a-z0-9]+)*$/;
 
 const EMAIL_RE = /^[^\s@<>()[\]\\,;:"]+@[^\s@<>()[\]\\,;:"]+\.[a-z]{2,}$/i;
 const MIN_FILL_MS = 1500;
@@ -55,7 +49,7 @@ export function validateLead(body: unknown, now = Date.now()): ValidationResult 
   if (b.consent !== true) return { ok: false, reason: "no_consent" };
 
   const rawInterest = Array.isArray(b.interest) ? b.interest : [b.interest];
-  const interest = [...new Set(rawInterest.map((i) => str(i, 40)).filter((i) => INTEREST_IDS.has(i)))];
+  const interest = [...new Set(rawInterest.filter((i): i is string => typeof i === "string" && i.length <= 60 && INTEREST_RE.test(i)))].slice(0, 10);
 
   const lead: LeadInput = {
     email,

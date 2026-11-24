@@ -4,6 +4,7 @@ import { usePathname } from "next/navigation";
 import { useEffect, useRef } from "react";
 import { getAssignments } from "@/lib/experiments";
 import { hydrateCart } from "@/lib/cart/cart";
+import { useCatalog } from "@/lib/catalog/context";
 import { captureAttribution, getLastTouch, isInternalTraffic } from "@/lib/analytics/attribution";
 import { consentStore, loadConsent } from "@/lib/analytics/consent";
 import { flushPending, track } from "@/lib/analytics/track";
@@ -15,12 +16,14 @@ import { loadClarity, loadGA4, loadMetaPixel, updateGA4Marketing } from "@/lib/a
  */
 export function AnalyticsProvider() {
   const pathname = usePathname();
+  const catalog = useCatalog();
   const lastPage = useRef<string | null>(null);
+  const catalogRef = useRef(catalog);
 
   // 1) Arranque
   useEffect(() => {
     captureAttribution(new URL(window.location.href), document.referrer);
-    hydrateCart();
+    hydrateCart(catalogRef.current);
 
     const apply = () => {
       const c = consentStore.get();

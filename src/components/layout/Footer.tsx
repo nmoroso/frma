@@ -1,9 +1,11 @@
 import Link from "next/link";
 import { SITE } from "@/config/site";
 import { CookiePreferencesButton } from "@/components/analytics/ConsentBanner";
+import { HideOnAdmin } from "./HideOnAdmin";
 
 export function Footer() {
   return (
+    <HideOnAdmin>
     <footer className="mt-24 border-t border-line bg-ivory">
       <div className="container-frma grid gap-10 py-14 sm:grid-cols-2 lg:grid-cols-4">
         <div>
@@ -45,6 +47,7 @@ export function Footer() {
         <p>Sitio en prelanzamiento: aún no recibimos pedidos ni pagos.</p>
       </div>
     </footer>
+    </HideOnAdmin>
   );
 }
 

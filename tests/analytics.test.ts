@@ -1,14 +1,17 @@
 import { describe, expect, it } from "vitest";
-import { getProductById } from "@/config/catalog";
 import { buildGa4Params, EVENT_NAMES, toMetaCall } from "@/lib/analytics/events";
-import { capsuleItem, productItem } from "@/lib/analytics/items";
+import { collectionItem, productItem } from "@/lib/analytics/items";
+import { findCollection, findProduct } from "@/lib/catalog/helpers";
+import { seedCatalog } from "@/lib/catalog/seed";
 import { validateLead } from "@/lib/leads/validate";
 import { computeMetrics, type EventRow, type LeadRow } from "@/lib/metrics";
 
-const tee = getProductById("polera-essential")!;
-const teeItem = productItem(tee, 19990, { colorId: "azul-marino", size: "M", quantity: 2 });
-const capItem = capsuleItem(179990, { topSize: "M", bottomSize: "42" });
-const common = { frma_session_id: "s1", experiment_id: "exp", variant_id: "b" };
+const catalog = seedCatalog();
+const tee = findProduct(catalog, "polera-essential")!;
+const navy = tee.variants.find((v) => v.slug === "azul-marino")!;
+const teeItem = productItem(tee, navy, 19990, { size: "M", quantity: 2 });
+const capItem = collectionItem(findCollection(catalog, "frma-01")!, 179990, { topSize: "M", bottomSize: "42" });
+const common = { frma_session_id: "s1", experiment_id: "exp", variant_id: "b", experiment_variant_id: "b" };
 
 describe("ítems GA4", () => {
   it("prenda individual con variante y categoría", () => {
@@ -17,7 +20,9 @@ describe("ítems GA4", () => {
       item_name: "Polera Essential",
       item_category: "Poleras",
       item_category2: "prenda_individual",
-      item_variant: "Azul marino / M",
+      item_variant: "Azul marino",
+      item_variant_id: "POLERA-ESSENTIAL-AZUL-MARINO",
+      item_size: "M",
       price: 19990,
       quantity: 2,
     });
@@ -50,8 +55,13 @@ describe("parámetros GA4", () => {
   });
   it("lista de eventos esperada", () => {
     expect([...EVENT_NAMES].sort()).toEqual(
-      ["page_view", "view_item_list", "select_item", "view_item", "add_to_cart", "remove_from_cart", "view_cart", "begin_checkout", "purchase_intent", "generate_lead"].sort(),
+      ["page_view", "view_item_list", "select_item", "view_item", "select_color", "add_to_cart", "remove_from_cart", "view_cart", "begin_checkout", "purchase_intent", "generate_lead"].sort(),
     );
+  });
+  it("select_color lleva producto, variante y color", () => {
+    const p = buildGa4Params("select_color", { color: { product_id: tee.id, product_name: tee.name, variant_id: navy.sku, color_name: navy.name } }, common);
+    expect(p).toMatchObject({ product_id: "polera-essential", product_name: "Polera Essential", variant_id: "POLERA-ESSENTIAL-AZUL-MARINO", color_name: "Azul marino", experiment_id: "exp", experiment_variant_id: "b" });
+    expect(p.items).toBeUndefined();
   });
 });
 
@@ -61,6 +71,7 @@ describe("Meta Pixel", () => {
     expect(map).toEqual({
       page_view: "PageView",
       view_item_list: null,
+      select_color: null,
       select_item: null,
       view_item: "ViewContent",
       add_to_cart: "AddToCart",
@@ -84,9 +95,9 @@ describe("Meta Pixel", () => {
 
 describe("validación de leads", () => {
   const now = 1_800_000_000_000;
-  const base = { email: "  Juan@Correo.CL ", consent: true, interest: ["frma-01", "inventado"], started_at: now - 5000, website: "" };
+  const base = { email: "  Juan@Correo.CL ", consent: true, interest: ["frma-01", "<script>"], started_at: now - 5000, website: "" };
 
-  it("normaliza correo y filtra intereses desconocidos", () => {
+  it("normaliza correo y filtra intereses con formato inválido", () => {
     const r = validateLead({ ...base, utm_source: "instagram" }, now);
     expect(r.ok).toBe(true);
     if (r.ok) {
@@ -156,6 +167,24 @@ describe("métricas del experimento", () => {
     expect(m.campaigns.find((c) => c.name === "(directo / sin UTM)")!.sessions).toBe(1);
     const p = m.products.find((x) => x.id === "frma-01")!;
     expect(p).toMatchObject({ type: "capsula", viewSessions: 1, addUnits: 1, intentSessions: 1, intentValue: 179990, leadsInterested: 1 });
+  });
+  it("preferencia por color", () => {
+    const tee = (variant: string, qty = 1) => [{ id: "polera-essential", type: "prenda_individual", price: 19990, qty, variant, variant_id: null }];
+    const m = computeMetrics(
+      [
+        ev("select_color", "s1", { items: tee("Azul marino") }),
+        ev("select_color", "s2", { items: tee("Azul marino") }),
+        ev("add_to_cart", "s1", { items: tee("Azul marino", 2) }),
+        ev("add_to_cart", "s2", { items: tee("Blanco / M") }),
+        ev("purchase_intent", "s1", { items: tee("Azul marino", 2) }),
+      ],
+      [],
+      "real",
+    );
+    expect(m.colors).toEqual([
+      { productId: "polera-essential", color: "Azul marino", selectSessions: 2, addUnits: 2, intentUnits: 2 },
+      { productId: "polera-essential", color: "Blanco", selectSessions: 0, addUnits: 1, intentUnits: 0 },
+    ]);
   });
   it("sin datos devuelve ceros, no cifras inventadas", () => {
     const m = computeMetrics([], [], "real");

@@ -1,7 +1,9 @@
 /**
- * PRECIOS PROVISIONALES — EDITA AQUÍ ANTES DE LANZAR PUBLICIDAD
+ * PRECIOS PROVISIONALES DEL CATÁLOGO INICIAL
  * ---------------------------------------------------------------
- * Todos los precios del sitio salen de este archivo (en CLP, sin puntos).
+ * Desde la versión 2 los precios se editan en /admin (Productos y
+ * Guardarropas). Estos valores solo se usan al importar el catálogo inicial
+ * o si Supabase no está configurado.
  * Son HIPÓTESIS de trabajo: NO están validados contra proveedores, costos
  * de importación, despacho ni márgenes.
  *
@@ -22,4 +24,4 @@ export const PRICES = {
   "frma-01": 179990,
 } as const satisfies Record<string, number>;
 
-export type PricedId = keyof typeof PRICES;
+

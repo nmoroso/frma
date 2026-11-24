@@ -2,34 +2,37 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
-import { CAPSULE, capsuleOutfits, capsulePieces } from "@/config/catalog";
-import { capsuleItem } from "@/lib/analytics/items";
+import { collectionOutfits, collectionPieces, findCollection, shapeFor, variantBasePrice } from "@/lib/catalog/helpers";
+import { useCatalog } from "@/lib/catalog/context";
+import { collectionItem } from "@/lib/analytics/items";
 import { track } from "@/lib/analytics/track";
 import { addToCart } from "@/lib/cart/actions";
 import { formatCLP } from "@/lib/format";
-import { usePriceFn } from "@/lib/hooks";
+import { usePriceOf } from "@/lib/hooks";
 import { CapsuleCollage } from "@/components/product/CapsuleCollage";
 import { ProductVisual } from "@/components/product/ProductVisual";
 
-export function CapsuleDetail() {
-  const priceOf = usePriceFn();
-  const pieces = capsulePieces();
-  const outfits = capsuleOutfits();
+export function CollectionDetail({ collectionId }: { collectionId: string }) {
+  const catalog = useCatalog();
+  const CAPSULE = findCollection(catalog, collectionId)!;
+  const priceOf = usePriceOf();
+  const pieces = collectionPieces(catalog, CAPSULE);
+  const outfits = collectionOutfits(catalog, CAPSULE);
   const [topSize, setTopSize] = useState("");
   const [bottomSize, setBottomSize] = useState("");
   const [error, setError] = useState("");
   const [added, setAdded] = useState(false);
   const viewed = useRef(false);
 
-  const capsulePrice = priceOf ? priceOf(CAPSULE.id) : null;
-  const separate = priceOf ? pieces.reduce((s, p) => s + priceOf(p.productId), 0) : null;
+  const capsulePrice = priceOf ? priceOf(CAPSULE.id, CAPSULE.price) : null;
+  const separate = priceOf ? pieces.reduce((s, p) => s + priceOf(p.product.id, variantBasePrice(p.product, p.variant)), 0) : null;
   const saving = capsulePrice !== null && separate !== null ? separate - capsulePrice : null;
 
   useEffect(() => {
     if (capsulePrice === null || viewed.current) return;
     viewed.current = true;
-    track("view_item", { items: [capsuleItem(capsulePrice)] });
-  }, [capsulePrice]);
+    track("view_item", { items: [collectionItem(CAPSULE, capsulePrice)] });
+  }, [capsulePrice, CAPSULE]);
 
   const onAdd = () => {
     if (!topSize || !bottomSize) {
@@ -38,14 +41,14 @@ export function CapsuleDetail() {
     }
     if (capsulePrice === null) return;
     setError("");
-    addToCart({ id: CAPSULE.id, kind: "capsule", topSize, bottomSize, quantity: 1 }, capsulePrice);
+    addToCart({ id: CAPSULE.id, kind: "capsule", topSize, bottomSize, quantity: 1 }, collectionItem(CAPSULE, capsulePrice, { topSize, bottomSize }));
     setAdded(true);
   };
 
   return (
     <>
       <section className="container-frma grid gap-8 pt-6 sm:pt-10 lg:grid-cols-[1.25fr_1fr] lg:gap-16">
-        <CapsuleCollage className="aspect-[5/4] w-full" priority />
+        <CapsuleCollage collection={CAPSULE} className="aspect-[5/4] w-full" priority />
         <div className="lg:sticky lg:top-28 lg:self-start">
           <p className="eyebrow">Guardarropa cápsula</p>
           <h1 className="display mt-3">{CAPSULE.name}</h1>
@@ -58,7 +61,7 @@ export function CapsuleDetail() {
             ) : (
               <>
                 <div className="flex items-baseline justify-between">
-                  <span className="text-sm text-muted">Comprando las 7 piezas por separado</span>
+                  <span className="text-sm text-muted">Comprando las {pieces.length} piezas por separado</span>
                   <span className="text-muted line-through">{formatCLP(separate!)}</span>
                 </div>
                 <div className="mt-2 flex items-baseline justify-between">
@@ -93,37 +96,49 @@ export function CapsuleDetail() {
 
       <section className="container-frma mt-24">
         <p className="eyebrow">Qué incluye</p>
-        <h2 className="h2 mt-2">7 piezas</h2>
+        <h2 className="h2 mt-2">{pieces.length} piezas</h2>
         <ul className="mt-8 grid grid-cols-2 gap-x-3 gap-y-8 sm:grid-cols-4 lg:grid-cols-7">
           {pieces.map((p, i) => (
             <li key={i}>
-              <Link href={`/producto/${p.product.slug}?color=${p.color.id}`} className="block">
-                <ProductVisual shape={p.product.shape} hex={p.color.hex} image={p.color.images[0]} alt={`${p.product.name} ${p.color.name}`} className="aspect-[4/5]" sizes="(min-width:1024px) 14vw, 50vw" />
+              <Link href={`/producto/${p.product.id}?color=${p.variant.slug}`} className="block">
+                <ProductVisual shape={shapeFor(p.product.category)} hex={p.variant.hex} image={p.variant.images[0]} alt={`${p.product.name} ${p.variant.name}`} className="aspect-[4/5]" sizes="(min-width:1024px) 14vw, 50vw" />
                 <p className="mt-2 text-sm">{p.product.name}</p>
-                <p className="text-xs text-muted">{p.color.name}</p>
+                <p className="text-xs text-muted">{p.variant.name}</p>
               </Link>
             </li>
           ))}
         </ul>
       </section>
 
+      {CAPSULE.images.length > 0 && (
+        <section className="container-frma mt-24" aria-label={`Fotos de ${CAPSULE.name}`}>
+          <p className="eyebrow">Cómo se usa</p>
+          <h2 className="h2 mt-2">{CAPSULE.name} en la calle</h2>
+          <div className="mt-8 grid grid-cols-2 gap-2 sm:gap-3 lg:grid-cols-3">
+            {CAPSULE.images.map((img, i) => (
+              <ProductVisual key={img.src} shape="tee" hex="#E9E3D8" image={img} alt={img.alt || `${CAPSULE.name} foto ${i + 1}`} className={i === 0 ? "col-span-2 aspect-[4/3] lg:col-span-2 lg:row-span-2 lg:aspect-auto" : "aspect-[4/5]"} sizes="(min-width:1024px) 33vw, 50vw" />
+            ))}
+          </div>
+        </section>
+      )}
+
       <section className="mt-24 bg-ivory py-16 sm:py-20">
         <div className="container-frma">
           <p className="eyebrow">Combinaciones</p>
           <h2 className="h2 mt-2">{outfits.length} outfits básicos</h2>
           <p className="mt-3 max-w-xl text-muted">
-            5 prendas superiores × 2 pantalones. Todo combina con todo: elige cualquiera de arriba y cualquiera de abajo.
+            {pieces.filter((p) => p.role === "top").length} prendas superiores × {pieces.filter((p) => p.role === "bottom").length} pantalones. Todo combina con todo: elige cualquiera de arriba y cualquiera de abajo.
           </p>
           <ol className="mt-10 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
             {outfits.map((o, i) => (
               <li key={o.id} className="bg-paper p-3">
                 <div className="grid grid-rows-[1fr_1fr] gap-1">
-                  <ProductVisual shape={o.top.product.shape} hex={o.top.color.hex} image={o.top.color.images[0]} alt={`${o.top.product.name} ${o.top.color.name}`} className="aspect-[5/4]" sizes="20vw" />
-                  <ProductVisual shape={o.bottom.product.shape} hex={o.bottom.color.hex} image={o.bottom.color.images[0]} alt={`${o.bottom.product.name} ${o.bottom.color.name}`} className="aspect-[5/4]" sizes="20vw" />
+                  <ProductVisual shape={shapeFor(o.top.product.category)} hex={o.top.variant.hex} image={o.top.variant.images[0]} alt={`${o.top.product.name} ${o.top.variant.name}`} className="aspect-[5/4]" sizes="20vw" />
+                  <ProductVisual shape={shapeFor(o.bottom.product.category)} hex={o.bottom.variant.hex} image={o.bottom.variant.images[0]} alt={`${o.bottom.product.name} ${o.bottom.variant.name}`} className="aspect-[5/4]" sizes="20vw" />
                 </div>
                 <p className="mt-3 text-[11px] uppercase tracking-[0.14em] text-muted">Look {String(i + 1).padStart(2, "0")}</p>
                 <p className="mt-1 text-sm leading-snug">
-                  {o.top.product.name} {o.top.color.name.toLowerCase()} + chino {o.bottom.color.name.toLowerCase()}
+                  {o.top.product.name} {o.top.variant.name.toLowerCase()} + {o.bottom.product.name} {o.bottom.variant.name.toLowerCase()}
                 </p>
               </li>
             ))}

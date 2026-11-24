@@ -3,11 +3,13 @@
 import Link from "next/link";
 import { useEffect, useRef } from "react";
 import { subtotal } from "@/lib/cart/cart";
-import { changeQuantity, lineItem, removeFromCart } from "@/lib/cart/actions";
+import { changeQuantity, removeFromCart } from "@/lib/cart/actions";
+import { lineAnalyticsItem, lineInfo } from "@/lib/cart/lines";
+import { useCatalog } from "@/lib/catalog/context";
+import type { AnalyticsItem } from "@/lib/analytics/items";
 import { track } from "@/lib/analytics/track";
 import { formatCLP } from "@/lib/format";
-import { useCart, useCartReady, usePriceFn } from "@/lib/hooks";
-import { lineInfo } from "@/components/cart/lineInfo";
+import { useCart, useCartReady, useLinePrice } from "@/lib/hooks";
 import { ProductVisual } from "@/components/product/ProductVisual";
 import { CapsuleCollage } from "@/components/product/CapsuleCollage";
 import { QuantityInput } from "@/components/ui/QuantityInput";
@@ -15,14 +17,15 @@ import { QuantityInput } from "@/components/ui/QuantityInput";
 export function CartClient() {
   const lines = useCart();
   const ready = useCartReady();
-  const priceOf = usePriceFn();
+  const catalog = useCatalog();
+  const priceOf = useLinePrice();
   const viewed = useRef(false);
 
   useEffect(() => {
     if (!ready || !priceOf || viewed.current || lines.length === 0) return;
     viewed.current = true;
-    track("view_cart", { items: lines.map((l) => lineItem(l, priceOf(l.id))) });
-  }, [ready, priceOf, lines]);
+    track("view_cart", { items: lines.map((l) => lineAnalyticsItem(l, catalog, priceOf(l))).filter((x): x is AnalyticsItem => x !== null) });
+    }, [ready, priceOf, lines, catalog]); // el ref evita repetir el evento
 
   if (!ready || !priceOf) return <div className="container-frma min-h-[50vh] pt-14" />;
 
@@ -47,13 +50,14 @@ export function CartClient() {
       <div className="mt-8 grid gap-10 lg:grid-cols-[1fr_360px]">
         <ul className="divide-y divide-line border-y border-line">
           {lines.map((line) => {
-            const info = lineInfo(line);
-            const unit = priceOf(line.id);
+            const info = lineInfo(line, catalog);
+            if (!info) return null;
+            const unit = priceOf(line);
             return (
               <li key={line.key} className="flex gap-4 py-5">
                 <Link href={info.href} className="w-24 shrink-0 sm:w-28">
                   {info.isCapsule && !info.image ? (
-                    <CapsuleCollage className="aspect-[4/5]" />
+                    <CapsuleCollage collection={catalog.collections.find((c) => c.id === line.id)!} className="aspect-[4/5]" />
                   ) : (
                     <ProductVisual shape={info.shape} hex={info.hex} image={info.image} alt={info.name} className="aspect-[4/5]" sizes="112px" />
                   )}
@@ -70,10 +74,10 @@ export function CartClient() {
                   <div className="flex items-center justify-between">
                     <QuantityInput
                       value={line.quantity}
-                      onChange={(q) => changeQuantity(line.key, q, priceOf)}
+                      onChange={(q) => changeQuantity(line.key, q, catalog, priceOf)}
                       label={`Cantidad de ${info.name}`}
                     />
-                    <button type="button" className="text-sm text-muted underline-offset-4 hover:text-ink hover:underline" onClick={() => removeFromCart(line.key, priceOf)}>
+                    <button type="button" className="text-sm text-muted underline-offset-4 hover:text-ink hover:underline" onClick={() => removeFromCart(line.key, catalog, priceOf)}>
                       Eliminar
                     </button>
                   </div>

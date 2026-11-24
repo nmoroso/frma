@@ -1,23 +1,19 @@
 import Link from "next/link";
-import { CAPSULE, capsuleOutfits, capsulePieces, getColor, PRODUCTS } from "@/config/catalog";
 import { HOME } from "@/config/home";
+import { activeVariants, shapeFor, usedCategories } from "@/lib/catalog/helpers";
+import { getCatalog } from "@/lib/catalog/server";
+import type { HomeImage } from "@/lib/catalog/types";
 import { HeroText } from "@/components/home/HeroText";
-import { CapsuleLink, HomeEssentials } from "@/components/home/HomeLists";
-import { CapsuleCollage } from "@/components/product/CapsuleCollage";
+import { CapsuleLink, FeaturedCapsule, HomeEssentials } from "@/components/home/HomeLists";
 import { Garment, ProductVisual } from "@/components/product/ProductVisual";
-import { Price } from "@/components/product/Price";
 import { LeadForm } from "@/components/forms/LeadForm";
 
-const CATEGORY_TILES = [
-  { href: "/catalogo?categoria=poleras", label: "Poleras", productId: "polera-essential", colorId: "gris-carbon" },
-  { href: "/catalogo?categoria=pantalones", label: "Pantalones", productId: "chino-everyday", colorId: "beige" },
-  { href: "/catalogo?categoria=camisas", label: "Polos", productId: "polo-classic", colorId: "azul-marino" },
-  { href: "/catalogo?categoria=camisas", label: "Camisas", productId: "camisa-oxford", colorId: "celeste" },
-];
+export default async function HomePage() {
+  const catalog = await getCatalog();
+  const home = catalog.home;
+  const hero = home.hero?.[0];
+  const categories = usedCategories(catalog).slice(0, 4);
 
-export default function HomePage() {
-  const pieces = capsulePieces().length;
-  const outfits = capsuleOutfits().length;
   return (
     <>
       {/* HERO */}
@@ -33,8 +29,8 @@ export default function HomePage() {
           </div>
         </div>
         <div className="order-1 lg:order-2">
-          {HOME.hero.image ? (
-            <ProductVisual shape="tee" hex="#E9E3D8" image={HOME.hero.image} alt={HOME.hero.image.alt} className="aspect-[4/5] h-full w-full lg:aspect-auto" priority sizes="(min-width:1024px) 50vw, 100vw" />
+          {hero ? (
+            <ProductVisual shape="tee" hex="#E9E3D8" image={hero.image} alt={hero.image.alt} className="aspect-[4/5] h-full w-full sm:aspect-[16/11] lg:aspect-auto" priority sizes="(min-width:1024px) 50vw, 100vw" />
           ) : (
             <HeroComposition />
           )}
@@ -49,27 +45,11 @@ export default function HomePage() {
         </div>
       </section>
 
+      {/* BANNERS (panel → Página principal → Banners) */}
+      {home.banner?.map((b, i) => <Banner key={`${b.image.src}-${i}`} item={b} />)}
+
       {/* CÁPSULA DESTACADA */}
-      <section className="bg-sand/50 py-16 sm:py-24">
-        <div className="container-frma grid items-center gap-10 lg:grid-cols-[1.3fr_1fr] lg:gap-16">
-          <CapsuleCollage className="aspect-[5/4]" />
-          <div>
-            <p className="eyebrow">Guardarropa cápsula</p>
-            <h2 className="display mt-3">{CAPSULE.name}</h2>
-            <p className="mt-5 text-lg font-light">{CAPSULE.tagline}</p>
-            <div className="mt-8 grid grid-cols-3 border-y border-line py-5 text-center">
-              <Stat n={pieces} label="piezas" />
-              <Stat n={outfits} label="combinaciones" />
-              <Stat n={1} label="decisión" />
-            </div>
-            <p className="mt-6 text-sm text-muted">
-              3 poleras, 2 chinos, 1 polo y 1 camisa oxford.
-            </p>
-            <p className="mt-2 text-2xl"><Price id={CAPSULE.id} /></p>
-            <CapsuleLink className="btn-primary mt-6 w-full sm:w-auto">Ver FRMA 01</CapsuleLink>
-          </div>
-        </div>
-      </section>
+      <FeaturedCapsule />
 
       {/* CATEGORÍAS */}
       <section className="container-frma py-20 sm:py-24">
@@ -81,13 +61,16 @@ export default function HomePage() {
           <Link href="/catalogo" className="link-underline hidden text-sm sm:inline">Ver todo</Link>
         </div>
         <div className="mt-10 grid grid-cols-2 gap-3 sm:gap-6 lg:grid-cols-4">
-          {CATEGORY_TILES.map((t) => {
-            const product = PRODUCTS.find((p) => p.id === t.productId)!;
-            const color = getColor(product, t.colorId);
+          {categories.map((cat) => {
+            const custom = home[`category:${cat.id}`]?.[0]?.image;
+            const product = catalog.products.find((p) => p.category === cat.id);
+            const variant = product ? activeVariants(product)[0] : undefined;
             return (
-              <Link key={t.label} href={t.href} className="group block">
-                <ProductVisual shape={product.shape} hex={color.hex} image={color.images[0]} alt={t.label} className="aspect-[3/4]" />
-                <p className="mt-3 text-sm font-medium">{t.label} <span aria-hidden className="inline-block transition-transform group-hover:translate-x-1">→</span></p>
+              <Link key={cat.id} href={`/catalogo?categoria=${cat.id}`} className="group block">
+                <ProductVisual shape={cat.shape} hex={variant?.hex ?? "#E9E3D8"} image={custom ?? variant?.images[0]} alt={cat.name} className="aspect-[3/4]" />
+                <p className="mt-3 text-sm font-medium">
+                  {cat.name} <span aria-hidden className="inline-block transition-transform group-hover:translate-x-1">→</span>
+                </p>
               </Link>
             );
           })}
@@ -100,6 +83,48 @@ export default function HomePage() {
         <h2 className="h2 mt-2">Esenciales FRMA</h2>
         <HomeEssentials />
       </section>
+
+      {/* EDITORIAL */}
+      {home.editorial?.length ? (
+        <section className="container-frma pb-20 sm:pb-24" aria-label="Editorial">
+          <div className={`grid gap-3 ${home.editorial.length > 1 ? "sm:grid-cols-2" : ""}`}>
+            {home.editorial.slice(0, 4).map((e, i) => (
+              <figure key={`${e.image.src}-${i}`}>
+                <ProductVisual shape="tee" hex="#E9E3D8" image={e.image} alt={e.image.alt} className={home.editorial!.length > 1 ? "aspect-[4/5]" : "aspect-[16/9]"} sizes="(min-width:640px) 50vw, 100vw" />
+                {(e.title || e.subtitle) && (
+                  <figcaption className="mt-3">
+                    {e.title && <p className="text-sm font-medium">{e.title}</p>}
+                    {e.subtitle && <p className="text-sm text-muted">{e.subtitle}</p>}
+                  </figcaption>
+                )}
+              </figure>
+            ))}
+          </div>
+        </section>
+      ) : null}
+
+      {/* DESTACADOS */}
+      {home.featured?.length ? (
+        <section className="container-frma pb-20 sm:pb-24">
+          <p className="eyebrow">Destacados</p>
+          <div className="mt-8 grid grid-cols-2 gap-3 sm:gap-6 lg:grid-cols-4">
+            {home.featured.slice(0, 8).map((f, i) => {
+              const inner = (
+                <>
+                  <ProductVisual shape="tee" hex="#E9E3D8" image={f.image} alt={f.image.alt} className="aspect-[3/4]" />
+                  {f.title && <p className="mt-3 text-sm font-medium">{f.title}</p>}
+                  {f.subtitle && <p className="text-xs text-muted">{f.subtitle}</p>}
+                </>
+              );
+              return f.href ? (
+                <Link key={i} href={f.href} className="block">{inner}</Link>
+              ) : (
+                <div key={i}>{inner}</div>
+              );
+            })}
+          </div>
+        </section>
+      ) : null}
 
       {/* BENEFICIOS */}
       <section className="border-y border-line bg-ivory">
@@ -118,9 +143,7 @@ export default function HomePage() {
         <div>
           <p className="eyebrow">Prelanzamiento</p>
           <h2 className="display mt-3">Sé el primero en saberlo.</h2>
-          <p className="mt-5 max-w-md text-muted">
-            FRMA aún no recibe pedidos. Déjanos tu correo y te avisamos cuando abramos, sin spam.
-          </p>
+          <p className="mt-5 max-w-md text-muted">FRMA aún no recibe pedidos. Déjanos tu correo y te avisamos cuando abramos, sin spam.</p>
         </div>
         <div className="bg-ivory p-6 sm:p-10">
           <LeadForm origin="home" />
@@ -130,20 +153,27 @@ export default function HomePage() {
   );
 }
 
-function Stat({ n, label }: { n: number; label: string }) {
-  return (
-    <div>
-      <p className="text-3xl font-light">{n}</p>
-      <p className="mt-1 text-xs uppercase tracking-[0.14em] text-muted">{label}</p>
+function Banner({ item }: { item: HomeImage }) {
+  const content = (
+    <div className="relative">
+      <ProductVisual shape="tee" hex="#E9E3D8" image={item.image} alt={item.image.alt} className="aspect-[4/5] w-full sm:aspect-[21/9]" sizes="100vw" />
+      {(item.title || item.subtitle) && (
+        <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/45 to-transparent p-6 text-paper sm:p-12">
+          {item.title && <p className="text-3xl font-light tracking-tight sm:text-5xl">{item.title}</p>}
+          {item.subtitle && <p className="mt-2 max-w-lg text-sm sm:text-base">{item.subtitle}</p>}
+          {item.href && <span className="mt-4 inline-block text-sm underline underline-offset-4">Ver más</span>}
+        </div>
+      )}
     </div>
   );
+  return <section className="pb-20 sm:pb-28">{item.href ? <Link href={item.href}>{content}</Link> : content}</section>;
 }
 
 /** Composición editorial con ilustraciones mientras no haya fotografía propia. */
 function HeroComposition() {
   return (
     <div className="relative aspect-[4/5] h-full w-full overflow-hidden bg-sand sm:aspect-[16/11] lg:aspect-auto" role="img" aria-label="Composición de prendas FRMA: polo crudo, camisa oxford celeste y chino beige">
-      <div className="absolute left-[6%] top-[8%] h-[62%] w-[52%] -rotate-6"><Garment shape="shirt" hex="#B9CCE0" /></div>
+      <div className="absolute left-[6%] top-[8%] h-[62%] w-[52%] -rotate-6"><Garment shape={shapeFor("camisas")} hex="#B9CCE0" /></div>
       <div className="absolute right-[4%] top-[14%] h-[56%] w-[48%] rotate-3"><Garment shape="polo" hex="#E9E2D3" /></div>
       <div className="absolute bottom-[2%] left-[26%] h-[56%] w-[46%] rotate-2"><Garment shape="chino" hex="#CDBB9C" /></div>
       <span className="absolute bottom-3 right-4 text-[10px] uppercase tracking-[0.14em] text-muted/80">Ilustración · fotografía próximamente</span>

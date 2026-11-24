@@ -1,11 +1,11 @@
 import "server-only";
-import type { SupabaseClient } from "@supabase/supabase-js";
+import type { ServerDb } from "./supabase/admin";
 import type { EventRow, LeadRow } from "./metrics";
 
 const PAGE = 1000;
 const MAX_ROWS = 100_000;
 
-async function fetchAll<T>(db: SupabaseClient, table: string, columns: string, since: string | null): Promise<{ rows: T[]; truncated: boolean }> {
+async function fetchAll<T>(db: ServerDb, table: string, columns: string, since: string | null): Promise<{ rows: T[]; truncated: boolean }> {
   const rows: T[] = [];
   for (let from = 0; from < MAX_ROWS; from += PAGE) {
     let q = db.from(table).select(columns).order("created_at", { ascending: true }).range(from, from + PAGE - 1);
@@ -18,7 +18,7 @@ async function fetchAll<T>(db: SupabaseClient, table: string, columns: string, s
   return { rows, truncated: true };
 }
 
-export function fetchEvents(db: SupabaseClient, since: string | null) {
+export function fetchEvents(db: ServerDb, since: string | null) {
   return fetchAll<EventRow>(
     db,
     "funnel_events",
@@ -27,6 +27,6 @@ export function fetchEvents(db: SupabaseClient, since: string | null) {
   );
 }
 
-export function fetchLeads(db: SupabaseClient, since: string | null) {
+export function fetchLeads(db: ServerDb, since: string | null) {
   return fetchAll<LeadRow>(db, "leads", "created_at,interest,utm_source,utm_campaign,variant_id,is_internal", since);
 }

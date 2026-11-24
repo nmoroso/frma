@@ -2,12 +2,13 @@
 
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useMemo } from "react";
-import { allColors, CAPSULE, CATEGORIES, PRODUCTS } from "@/config/catalog";
-import { capsuleItem, productItem } from "@/lib/analytics/items";
+import { activeVariants, allColors, colorKey, usedCategories, variantBasePrice } from "@/lib/catalog/helpers";
+import { useCatalog } from "@/lib/catalog/context";
+import type { Product } from "@/lib/catalog/types";
+import { collectionItem, productItem } from "@/lib/analytics/items";
 import { track } from "@/lib/analytics/track";
 import { formatCLP } from "@/lib/format";
-import { usePriceFn } from "@/lib/hooks";
+import { usePriceOf, type PriceOf } from "@/lib/hooks";
 import { ProductCard } from "@/components/product/ProductCard";
 import { Price } from "@/components/product/Price";
 import { CapsuleCollage } from "@/components/product/CapsuleCollage";
@@ -21,11 +22,24 @@ const PRICE_RANGES = [
 
 const LIST = { id: "catalogo", name: "Catálogo" };
 
+/** Variantes que cumplen el filtro de color (o todas). */
+function matchingVariants(p: Product, color: string) {
+  return activeVariants(p).filter((v) => !color || colorKey(v.name) === color);
+}
+
+/** ¿Algún color del producto cae en el rango de precio? */
+function priceMatches(p: Product, color: string, range: { min: number; max: number } | undefined, priceOf: PriceOf | null) {
+  if (!range) return true;
+  if (!priceOf) return true;
+  return matchingVariants(p, color).some((v) => inRange(priceOf(p.id, variantBasePrice(p, v)), range));
+}
+
 export function CatalogClient() {
+  const catalog = useCatalog();
   const params = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();
-  const priceOf = usePriceFn();
+  const priceOf = usePriceOf();
 
   const category = params.get("categoria") ?? "todo";
   const color = params.get("color") ?? "";
@@ -39,49 +53,50 @@ export function CatalogClient() {
     router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
   };
 
-  const showCapsule =
-    (category === "todo" || category === "capsulas") &&
-    !color &&
-    (!range || (priceOf && inRange(priceOf(CAPSULE.id), range)));
+  const categories = usedCategories(catalog);
+  const collections = (category === "todo" || category === "capsulas") && !color
+    ? catalog.collections.filter((c) => !range || !priceOf || inRange(priceOf(c.id, c.price), range))
+    : [];
 
-  const products = useMemo(
-    () =>
-      category === "capsulas"
-        ? []
-        : PRODUCTS.filter((p) => {
-            if (category === "camisas" && !(p.category === "camisas" || p.category === "polos")) return false;
-            if (category !== "todo" && category !== "camisas" && p.category !== category) return false;
-            if (color && !p.colors.some((c) => c.id === color)) return false;
-            if (range && priceOf && !inRange(priceOf(p.id), range)) return false;
-            return true;
-          }),
-    [category, color, range, priceOf],
-  );
+  const products =
+    category === "capsulas"
+      ? []
+      : catalog.products.filter((p) => {
+          if (category === "camisas" && !(p.category === "camisas" || p.category === "polos")) return false;
+          if (category !== "todo" && category !== "camisas" && p.category !== category) return false;
+          if (color && matchingVariants(p, color).length === 0) return false;
+          return priceMatches(p, color, range, priceOf);
+        });
 
+  const initialSlug = (p: Product) => (color ? matchingVariants(p, color)[0]?.slug : undefined);
   const listItems = priceOf
     ? [
-        ...(showCapsule ? [capsuleItem(priceOf(CAPSULE.id), { list: LIST, index: 0 })] : []),
-        ...products.map((p, i) =>
-          productItem(p, priceOf(p.id), { colorId: color || undefined, list: LIST, index: i + (showCapsule ? 1 : 0) }),
-        ),
+        ...collections.map((c, i) => collectionItem(c, priceOf(c.id, c.price), { list: LIST, index: i })),
+        ...products.map((p, i) => {
+          const v = activeVariants(p).find((x) => x.slug === initialSlug(p)) ?? activeVariants(p)[0];
+          return productItem(p, v, priceOf(p.id, variantBasePrice(p, v)), { list: LIST, index: i + collections.length });
+        }),
       ]
     : null;
   useViewItemList(LIST, listItems);
 
-  const total = products.length + (showCapsule ? 1 : 0);
+  const total = products.length + collections.length;
   const activeFilters = category !== "todo" || color || range;
+  const filterCategories = [
+    { id: "todo", name: "Todo" },
+    ...(catalog.collections.length ? [{ id: "capsulas", name: "Cápsulas" }] : []),
+    ...categories.filter((c) => c.id !== "polos" || !categories.some((x) => x.id === "camisas")).map((c) => (c.id === "camisas" && categories.some((x) => x.id === "polos") ? { ...c, name: "Camisas y polos" } : c)),
+  ];
 
   return (
     <div className="container-frma pt-10 sm:pt-14">
       <p className="eyebrow">Catálogo</p>
       <h1 className="display mt-3">Prendas esenciales</h1>
-      <p className="mt-4 max-w-xl text-muted">
-        Pocas piezas, bien elegidas. Todo está pensado para combinar entre sí.
-      </p>
+      <p className="mt-4 max-w-xl text-muted">Pocas piezas, bien elegidas. Todo está pensado para combinar entre sí.</p>
 
       <section aria-label="Filtros" className="mt-10 space-y-5 border-y border-line py-6">
         <FilterRow label="Categoría">
-          {[{ id: "todo", name: "Todo" }, { id: "capsulas", name: "Cápsulas" }, ...CATEGORIES.filter((c) => c.id !== "polos").map((c) => (c.id === "camisas" ? { ...c, name: "Camisas y polos" } : c))].map((c) => (
+          {filterCategories.map((c) => (
             <button
               key={c.id}
               type="button"
@@ -94,15 +109,15 @@ export function CatalogClient() {
           ))}
         </FilterRow>
         <FilterRow label="Color">
-          {allColors().map((c) => (
+          {allColors(catalog).map((c) => (
             <button
-              key={c.id}
+              key={c.key}
               type="button"
-              aria-pressed={color === c.id}
-              className={`chip gap-2 ${color === c.id ? "chip-active" : ""}`}
-              onClick={() => setParam("color", color === c.id ? null : c.id)}
+              aria-pressed={color === c.key}
+              className={`chip gap-2 ${color === c.key ? "chip-active" : ""}`}
+              onClick={() => setParam("color", color === c.key ? null : c.key)}
             >
-              <span className="h-3.5 w-3.5 rounded-full border border-line" style={{ backgroundColor: c.hex }} />
+              <span className="h-3.5 w-3.5 rounded-full border border-ink/25" style={{ backgroundColor: c.hex }} />
               {c.name}
             </button>
           ))}
@@ -130,37 +145,32 @@ export function CatalogClient() {
         </div>
       </section>
 
-      {showCapsule && (
+      {collections.map((c, i) => (
         <Link
-          href="/frma-01"
-          onClick={() => priceOf && track("select_item", { item_list_id: LIST.id, item_list_name: LIST.name, items: [capsuleItem(priceOf(CAPSULE.id), { list: LIST, index: 0 })] })}
+          key={c.id}
+          href={c.id === "frma-01" ? "/frma-01" : `/guardarropa/${c.id}`}
+          onClick={() => priceOf && track("select_item", { item_list_id: LIST.id, item_list_name: LIST.name, items: [collectionItem(c, priceOf(c.id, c.price), { list: LIST, index: i })] })}
           className="mt-10 grid items-center gap-6 bg-ivory p-4 sm:grid-cols-2 sm:p-8"
         >
-          <CapsuleCollage className="aspect-[4/3]" />
+          <CapsuleCollage collection={c} className="aspect-[4/3]" />
           <div className="sm:pl-6">
             <p className="eyebrow">Guardarropa cápsula</p>
-            <p className="h2 mt-2">{CAPSULE.name}</p>
-            <p className="mt-2 text-muted">{CAPSULE.tagline}</p>
-            <p className="mt-4 text-lg"><Price id={CAPSULE.id} /></p>
+            <p className="h2 mt-2">{c.name}</p>
+            <p className="mt-2 text-muted">{c.tagline}</p>
+            <p className="mt-4 text-lg"><Price id={c.id} base={c.price} /></p>
             <span className="link-underline mt-4 inline-block text-sm">Ver la cápsula</span>
           </div>
         </Link>
-      )}
+      ))}
 
       {products.length > 0 ? (
         <div className="mt-10 grid grid-cols-2 gap-x-3 gap-y-10 sm:gap-x-6 lg:grid-cols-3 xl:grid-cols-4">
           {products.map((p, i) => (
-            <ProductCard
-              key={`${p.id}-${color}`}
-              product={p}
-              list={LIST}
-              index={i + (showCapsule ? 1 : 0)}
-              initialColorId={color && p.colors.some((c) => c.id === color) ? color : undefined}
-            />
+            <ProductCard key={`${p.id}-${color}`} product={p} list={LIST} index={i + collections.length} initialColor={initialSlug(p)} />
           ))}
         </div>
       ) : (
-        !showCapsule && <p className="py-20 text-center text-muted">No hay productos con estos filtros.</p>
+        collections.length === 0 && <p className="py-20 text-center text-muted">No hay productos con estos filtros.</p>
       )}
     </div>
   );

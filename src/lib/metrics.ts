@@ -8,7 +8,7 @@ export type EventRow = {
   event_name: string;
   session_id: string;
   visitor_id: string;
-  items: { id: string | null; type: string; price: number | null; qty: number }[] | null;
+  items: { id: string | null; type: string; price: number | null; qty: number; variant?: string | null; variant_id?: string | null }[] | null;
   value: number | null;
   utm_source: string | null;
   utm_campaign: string | null;
@@ -170,9 +170,29 @@ export function computeMetrics(allEvents: EventRow[], allLeads: LeadRow[], traff
     return { name, sessions: s, addToCart: f.find((x) => x.id === "add_to_cart")!.sessions, purchaseIntent: intent, intentRate: pct(intent, s) };
   });
 
+  // Preferencia por producto y color (select_color, add_to_cart e intención por variante)
+  const colorMap = new Map<string, { productId: string; color: string; selects: Set<string>; addUnits: number; intentUnits: number }>();
+  for (const e of events) {
+    if (!["select_color", "add_to_cart", "purchase_intent"].includes(e.event_name)) continue;
+    for (const it of e.items ?? []) {
+      if (!it.id || it.type === "capsula" || !it.variant) continue;
+      const color = it.variant.split(" / ")[0]; // compatibilidad con eventos antiguos "Color / Talla"
+      const k = `${it.id}::${color}`;
+      const c = colorMap.get(k) ?? { productId: it.id, color, selects: new Set<string>(), addUnits: 0, intentUnits: 0 };
+      if (e.event_name === "select_color") c.selects.add(e.session_id);
+      if (e.event_name === "add_to_cart") c.addUnits += it.qty;
+      if (e.event_name === "purchase_intent") c.intentUnits += it.qty;
+      colorMap.set(k, c);
+    }
+  }
+  const colors = [...colorMap.values()]
+    .map((c) => ({ productId: c.productId, color: c.color, selectSessions: c.selects.size, addUnits: c.addUnits, intentUnits: c.intentUnits }))
+    .sort((a, b) => b.addUnits - a.addUnits || b.selectSessions - a.selectSessions);
+
   return {
     visitors,
     sessions,
+    colors,
     eventsCount: events.length,
     funnel: funnelFor(events),
     leadsConfirmed: leads.length,

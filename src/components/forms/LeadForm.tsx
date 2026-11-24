@@ -6,11 +6,25 @@ import { SITE } from "@/config/site";
 import { getAssignments, experimentParams } from "@/lib/experiments";
 import { getLastTouch, getSessionId, getVisitorId, isInternalTraffic } from "@/lib/analytics/attribution";
 import { track } from "@/lib/analytics/track";
-import { INTEREST_OPTIONS } from "@/lib/leads/validate";
+import { useCatalog } from "@/lib/catalog/context";
 
 type Status = "idle" | "sending" | "created" | "duplicate" | "error" | "unavailable";
 
-export function LeadForm({ defaultInterest = [], origin = "directo" }: { defaultInterest?: string[]; origin?: string }) {
+export function LeadForm({
+  defaultInterest = [],
+  origin = "directo",
+  options,
+}: {
+  defaultInterest?: string[];
+  origin?: string;
+  options?: { id: string; label: string }[];
+}) {
+  const catalog = useCatalog();
+  const INTEREST_OPTIONS = options ?? [
+    { id: "general", label: "Todo FRMA" },
+    ...catalog.collections.map((c) => ({ id: c.id, label: c.name })),
+    ...catalog.products.map((p) => ({ id: p.id, label: p.name })),
+  ];
   const [email, setEmail] = useState("");
   const [consent, setConsent] = useState(false);
   const [interest, setInterest] = useState<string>(defaultInterest[0] ?? "general");

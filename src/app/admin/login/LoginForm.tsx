@@ -33,7 +33,7 @@ export function LoginForm() {
       setError("Credenciales inválidas.");
       return;
     }
-    router.replace("/admin/experiment");
+    router.replace("/admin");
     router.refresh();
   };
 

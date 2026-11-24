@@ -1,12 +1,13 @@
 /**
- * Textos e imágenes de la página de inicio (editables).
- * Para usar una foto en el hero: copia el archivo a /public/images/ y
- * completa `hero.image`. Marca `conceptual: true` si fue generada con IA.
+ * Textos de la página de inicio.
+ * Las IMÁGENES del inicio (portada, banners, categorías, editorial, destacados)
+ * se administran en /admin → Página principal. `hero.image` solo se usa si
+ * Supabase no está configurado.
  */
-import type { ProductImage } from "./catalog";
+type LocalImage = { src: string; alt: string; conceptual?: boolean };
 
 export const HOME: {
-  hero: { eyebrow: string; title: string; subtitle: string; cta: string; secondaryCta: string; image?: ProductImage };
+  hero: { eyebrow: string; title: string; subtitle: string; cta: string; secondaryCta: string; image?: LocalImage };
   benefits: { title: string; text: string }[];
   manifesto: { title: string; text: string };
 } = {

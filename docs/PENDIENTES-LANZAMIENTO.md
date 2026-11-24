@@ -8,7 +8,9 @@ Lista de lo que **requiere tu confirmación o decisión**. Nada de esto se inven
 - [ ] **Materiales, gramajes, calce, origen y cuidados** de cada prenda (hoy "Pendiente de verificar" en `catalog.ts`).
 - [ ] **Guía de tallas** (poleras S–XXL; pantalones 38–48: confirmar sistema de tallas con el proveedor).
 - [ ] **Colores finales** y que coincidan con las muestras físicas.
-- [ ] **Fotografías**: propias o generadas con IA, marcadas `conceptual: true` cuando corresponda. No usar imágenes de otras marcas.
+- [ ] **Fotografías**: súbelas en el panel (`/admin`), una galería por color; marca como **IA** las generadas con inteligencia artificial (se rotulan "Imagen conceptual"). No usar imágenes de otras marcas.
+- [ ] **Colores**: verifica que el HEX de cada círculo se parezca al color real de la prenda (usa el cuentagotas sobre una foto con buena luz).
+- [ ] **SKU**: reemplaza los SKU generados (`POLERA-ESSENTIAL-BLANCO`) por los del proveedor si existen.
 - [ ] **Despacho**: operador, cobertura, plazos y costos (hoy "Por confirmar").
 - [ ] **Nombre de marca**: FRMA es provisional. Revisar disponibilidad en INAPI (marca), NIC Chile (dominio) e Instagram.
 - [ ] **Correo de contacto** real (`NEXT_PUBLIC_CONTACT_EMAIL`) y que alguien lo revise.
@@ -24,9 +26,16 @@ Lista de lo que **requiere tu confirmación o decisión**. Nada de esto se inven
 - [ ] **Darse de baja**: definir cómo se procesa (hoy por correo; la tabla tiene `unsubscribed_at`). Cada correo de marketing debe incluir opción de baja.
 - [ ] **Términos y condiciones**: no existen porque no hay venta; serán obligatorios antes de vender.
 
+## Panel de administración
+- [ ] Ejecutar `supabase/schema.sql` actualizado en el proyecto de Supabase de producción.
+- [ ] Importar el catálogo inicial desde `/admin` y revisar que precios y textos coincidan.
+- [ ] Desactivar "Allow new users to sign up" en Supabase Auth y usar contraseñas largas para los administradores.
+- [ ] Revisar los cupos de Supabase Storage y de optimización de imágenes de Vercel según la cantidad de fotos (ver GUIA-INTEGRACIONES §8).
+- [ ] Decidir quién más tendrá acceso (`ADMIN_EMAILS`). Todos los administradores pueden publicar y eliminar.
+
 ## Medición
 - [ ] Cuentas creadas y variables cargadas en Vercel (GA4, Meta, Clarity, Supabase, `ADMIN_EMAILS`).
-- [ ] GA4: dimensiones personalizadas, eventos clave, filtro de tráfico interno en *Probando*.
+- [ ] GA4: dimensiones personalizadas (incluidas las de color: `product_id`, `color_name`, `variant_id`, `item_variant_id`, `item_size`), eventos clave, filtro de tráfico interno en *Probando*.
 - [ ] Meta: dominio verificado, conversión personalizada `PurchaseIntent`, Pixel Helper sin errores.
 - [ ] Definir **criterios de éxito** del smoke test ANTES de gastar (p. ej. "tasa de intención de compra ≥ X% de las sesiones con UTM de Instagram", "≥ N leads con CPL ≤ $Y").
 - [ ] Definir **presupuesto y duración** de la campaña y tamaño mínimo de muestra por variante si usas A/B.
@@ -38,3 +47,4 @@ Lista de lo que **requiere tu confirmación o decisión**. Nada de esto se inven
 - [ ] Límite de peticiones distribuido (Upstash/Vercel KV) si hay abuso de `/api/events`.
 - [ ] Meta Conversions API (servidor) para mejorar la atribución con bloqueadores; requiere token y revisión legal.
 - [ ] Correo de confirmación (doble opt-in) para los leads.
+- [ ] Historial de cambios del catálogo (quién cambió qué) si el equipo crece.

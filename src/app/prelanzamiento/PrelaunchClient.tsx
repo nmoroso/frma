@@ -2,16 +2,25 @@
 
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { CAPSULE, getProductById } from "@/config/catalog";
+import { useCatalog } from "@/lib/catalog/context";
+import { findCollection, findProduct } from "@/lib/catalog/helpers";
 import { LeadForm } from "@/components/forms/LeadForm";
 
 export function PrelaunchClient() {
+  const catalog = useCatalog();
   const params = useSearchParams();
+  const nameOf = (id: string) => findCollection(catalog, id)?.name ?? findProduct(catalog, id)?.name;
   const fromCheckout = params.get("origen") === "checkout";
   const interest = (params.get("interes") ?? "")
     .split(",")
     .map((s) => s.trim())
-    .filter((id) => id === CAPSULE.id || getProductById(id));
+    .filter((id) => Boolean(nameOf(id)));
+
+  const interestOptions = [
+    { id: "general", label: "Todo FRMA" },
+    ...catalog.collections.map((c) => ({ id: c.id, label: c.name })),
+    ...catalog.products.map((p) => ({ id: p.id, label: p.name })),
+  ];
 
   return (
     <div className="container-frma grid gap-12 py-12 sm:py-20 lg:grid-cols-2 lg:gap-20">
@@ -32,7 +41,7 @@ export function PrelaunchClient() {
         </div>
         {fromCheckout && interest.length > 0 && (
           <p className="mt-6 text-sm text-muted">
-            Te interesó: {interest.map((id) => (id === CAPSULE.id ? CAPSULE.name : getProductById(id)!.name)).join(", ")}.
+            Te interesó: {interest.map((id) => nameOf(id)).join(", ")}.
             Tu carrito queda guardado en este navegador.
           </p>
         )}
@@ -42,7 +51,7 @@ export function PrelaunchClient() {
         <h2 className="text-xl font-light">Recibe el aviso de lanzamiento</h2>
         <p className="mt-2 text-sm text-muted">Es voluntario. Solo te pediremos tu correo.</p>
         <div className="mt-6">
-          <LeadForm defaultInterest={interest} origin={fromCheckout ? "checkout" : "prelanzamiento"} />
+          <LeadForm options={interestOptions} defaultInterest={interest} origin={fromCheckout ? "checkout" : "prelanzamiento"} />
         </div>
       </div>
     </div>

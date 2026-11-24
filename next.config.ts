@@ -1,5 +1,15 @@
 import type { NextConfig } from "next";
 
+/** Fotos del catálogo: se sirven desde Supabase Storage y Next las optimiza (WebP/AVIF, tamaños responsive). */
+const supabase = (() => {
+  try {
+    return process.env.NEXT_PUBLIC_SUPABASE_URL ? new URL(process.env.NEXT_PUBLIC_SUPABASE_URL) : null;
+  } catch {
+    return null;
+  }
+})();
+const isLocalSupabase = Boolean(supabase && ["127.0.0.1", "localhost"].includes(supabase.hostname));
+
 const nextConfig: NextConfig = {
   cacheComponents: true,
   partialPrefetching: true,
@@ -12,6 +22,26 @@ const nextConfig: NextConfig = {
     },
   },
   poweredByHeader: false,
+  images: {
+    formats: ["image/avif", "image/webp"],
+    qualities: [75, 85],
+    minimumCacheTTL: 60 * 60 * 24 * 30,
+    remotePatterns: supabase
+      ? [
+          {
+            protocol: supabase.protocol.replace(":", "") as "http" | "https",
+            hostname: supabase.hostname,
+            port: supabase.port,
+            pathname: "/storage/v1/object/public/**",
+          },
+        ]
+      : [],
+    // Solo para pruebas con Supabase local (http://127.0.0.1:54321).
+    dangerouslyAllowLocalIP: isLocalSupabase,
+  },
+  experimental: {
+    serverActions: { bodySizeLimit: "2mb" },
+  },
   async headers() {
     return [
       {

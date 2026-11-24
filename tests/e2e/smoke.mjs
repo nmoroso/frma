@@ -19,6 +19,7 @@ const BASE = process.env.BASE_URL || "http://localhost:3100";
 const SHOTS = process.env.SHOTS_DIR || "";
 const VENDORS = /googletagmanager|google-analytics|facebook\.net|facebook\.com\/tr|clarity\.ms/;
 let failures = 0;
+const EMAIL = `prueba+${Date.now()}@ejemplo.cl`; // único por ejecución
 const ok = (cond, msg) => {
   console.log(`${cond ? "✓" : "✗"} ${msg}`);
   if (!cond) failures++;
@@ -119,7 +120,7 @@ const browser = await chromium.launch();
   // Formulario: validaciones
   await page.getByRole("button", { name: "Avísenme del lanzamiento" }).click();
   ok((await page.getByRole("alert").first().innerText()).includes("correo válido"), "valida email");
-  await page.getByLabel("Correo electrónico").fill("prueba@ejemplo.cl");
+  await page.getByLabel("Correo electrónico").fill(EMAIL);
   await page.getByRole("button", { name: "Avísenme del lanzamiento" }).click();
   ok((await page.getByRole("alert").first().innerText()).includes("autorización"), "exige consentimiento explícito");
   await page.waitForTimeout(1600);
@@ -153,7 +154,7 @@ const browser = await chromium.launch();
     ok(names.some((n) => n.startsWith("generate_lead")), "con Supabase: generate_lead tras registro exitoso");
   }
   const json = JSON.stringify(ga) + JSON.stringify(await page.evaluate(() => window.fbq?.queue?.map((a) => Array.from(a))));
-  ok(!json.includes("prueba@ejemplo.cl"), "ningún evento contiene el correo");
+  ok(!json.includes(EMAIL), "ningún evento contiene el correo");
   ok(await page.evaluate(() => document.cookie.includes("_fbc=fb.1.")), "cookie _fbc reconstruida desde fbclid tras consentimiento");
   ok(errors.length === 0, `sin errores JS (${errors.join(" | ")})`);
   await ctx.close();

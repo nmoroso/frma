@@ -37,6 +37,7 @@ export async function POST(req: Request) {
           id: s(i.id, 60),
           type: i.type === "capsula" ? "capsula" : "prenda_individual",
           variant: s(i.variant, 80),
+          variant_id: s(i.variant_id, 80),
           price: Number.isFinite(Number(i.price)) ? Math.round(Number(i.price)) : null,
           qty: Number.isFinite(Number(i.qty)) ? Math.min(99, Math.max(0, Math.round(Number(i.qty)))) : 1,
         };

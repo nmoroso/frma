@@ -15,16 +15,24 @@ const NAV = [
   { href: "/catalogo?categoria=camisas", label: "Camisas y polos" },
 ];
 
-export function Header() {
+export function Header(props: { static?: boolean }) {
+  if (props.static) return <StoreHeader pathname={null} />;
+  return <RoutedHeader />;
+}
+
+function RoutedHeader() {
   const pathname = usePathname();
+  if (pathname?.startsWith("/admin")) return <AdminHeader />;
+  return <StoreHeader pathname={pathname} />;
+}
+
+function StoreHeader({ pathname }: { pathname: string | null }) {
   // El menú queda abierto solo para la ruta en que se abrió (se cierra al navegar).
   const [openFor, setOpenFor] = useState<string | null>(null);
   const open = openFor !== null && openFor === pathname;
   const lines = useCart();
   const ready = useCartReady();
   const n = count(lines);
-
-  if (pathname?.startsWith("/admin")) return <AdminHeader />;
 
   return (
     <header className="sticky top-0 z-40 border-b border-line bg-paper/95 backdrop-blur">

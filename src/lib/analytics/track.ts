@@ -32,6 +32,8 @@ export function commonParams(): CommonParams {
 
 export function track(name: EventName, input: EventInput = {}) {
   if (typeof window === "undefined") return;
+  // El panel de administración y sus vistas previas nunca se miden.
+  if (window.location.pathname.startsWith("/admin")) return;
   const consent = consentStore.get();
   if (consent === undefined || consent === null) {
     // Aún sin decisión: retener en memoria (no persistido).
@@ -85,13 +87,16 @@ function sendFirstParty(name: EventName, input: EventInput, common: CommonParams
     session_id: common.frma_session_id,
     visitor_id: getVisitorId(),
     page_path: input.page_path ?? window.location.pathname,
-    items: (input.items ?? []).map((i) => ({
-      id: i.item_id,
-      type: i.item_category2,
-      variant: i.item_variant,
-      price: i.price,
-      qty: i.quantity,
-    })),
+    items: input.color
+      ? [{ id: input.color.product_id, type: "prenda_individual", variant: input.color.color_name, variant_id: input.color.variant_id, price: null, qty: 1 }]
+      : (input.items ?? []).map((i) => ({
+          id: i.item_id,
+          type: i.item_category2,
+          variant: i.item_variant,
+          variant_id: i.item_variant_id,
+          price: i.price,
+          qty: i.quantity,
+        })),
     value: input.value ?? (input.items?.length ? itemsValue(input.items) : undefined),
     lead_interest: input.lead_interest,
     utm_source: last.utm_source,

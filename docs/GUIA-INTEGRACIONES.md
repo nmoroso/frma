@@ -17,10 +17,11 @@ Dónde poner cada valor:
 2. **New project**. Nombre: `frma`. Contraseña de base de datos: genera una segura y guárdala en tu gestor de contraseñas. **Región: South America (São Paulo)** (la más cercana a Chile).
 3. Espera ~2 minutos a que se cree.
 
-### 1.2 Crear las tablas
+### 1.2 Crear las tablas y el almacenamiento de fotos
 1. Menú izquierdo → **SQL Editor** → **New query**.
 2. Abre el archivo `supabase/schema.sql` de este proyecto, copia todo, pégalo y presiona **Run**.
-3. Debe decir *Success*. En **Table Editor** verás `leads` y `funnel_events`.
+3. Debe decir *Success*. En **Table Editor** verás `leads`, `funnel_events`, `products`, `product_variants`, `media`, `models`, `collections`, `home_images` y otras. En **Storage** verás el bucket **media** (público de solo lectura, máx. 8 MB por foto).
+4. Cada vez que actualices el proyecto, vuelve a ejecutar el archivo: es seguro hacerlo y no borra datos.
 
 ### 1.3 Obtener las claves
 **Project Settings (engranaje) → API Keys** (o **Data API / API**):
@@ -62,6 +63,22 @@ Dónde poner cada valor:
 | Variante | `variant_id` |
 | Interés del lead | `lead_interest` |
 | Sesión FRMA | `frma_session_id` |
+| Producto (selección de color) | `product_id` |
+| Color seleccionado | `color_name` |
+| SKU del color seleccionado | `variant_id` |
+
+| Variante del experimento | `experiment_variant_id` |
+
+> Nota: `variant_id` tiene dos usos. En `select_color` es el **SKU del color** (así lo pide el evento); en los demás eventos es la variante del experimento A/B. Para analizar experimentos sin ambigüedad usa `experiment_variant_id`, que va en todos los eventos cuando hay un experimento activo.
+
+Y con alcance **Artículo** (Item), para analizar por color y talla:
+
+| Nombre | Parámetro del artículo |
+|---|---|
+| SKU del color | `item_variant_id` |
+| Talla | `item_size` |
+
+El color de cada artículo ya viaja en **Variante del artículo** (`item_variant`), que GA4 reconoce sin configurar nada.
 
 La distinción **cápsula vs. prenda individual** también viaja en cada ítem como **Categoría de artículo 2** (`item_category2` = `capsula` / `prenda_individual`), que GA4 ya reconoce sin configurar nada.
 
@@ -80,7 +97,7 @@ El sitio ya envía `traffic_type=internal` desde localhost, previews de Vercel y
 ### 2.6 Verificar
 1. Pon `NEXT_PUBLIC_ANALYTICS_DEBUG=true` (temporalmente), despliega.
 2. Abre el sitio, acepta cookies y recorre: inicio → FRMA 01 → agregar → carrito → checkout → continuar.
-3. GA4 → **Administrar → DebugView**: verás `page_view`, `view_item_list`, `select_item`, `view_item`, `add_to_cart`, `view_cart`, `begin_checkout`, `purchase_intent` con sus parámetros (`items`, `value`, `currency=CLP`).
+3. GA4 → **Administrar → DebugView**: verás `page_view`, `view_item_list`, `select_item`, `view_item`, `select_color` (al cambiar de color), `add_to_cart`, `view_cart`, `begin_checkout`, `purchase_intent` con sus parámetros (`items` con `item_variant` = color, `value`, `currency=CLP`).
 4. En la consola del navegador (F12) verás líneas `[FRMA analytics] evento → destinos`.
 5. Vuelve a poner `NEXT_PUBLIC_ANALYTICS_DEBUG=false` y redepliega.
 
@@ -175,6 +192,7 @@ El panel `/admin/experiment` usa la medición propia. Para analizar los datos de
 | Embudo por etapa | Nombre del evento (filtro: `view_item`, `add_to_cart`, `begin_checkout`, `purchase_intent`, `generate_lead`) | Usuarios totales, Recuento de eventos |
 | Campañas | Fuente/medio de la sesión, Campaña de la sesión | Sesiones, Agregados al carrito, Checkouts, Eventos clave |
 | Productos | Nombre del artículo, Categoría de artículo 2 | Artículos vistos, Artículos agregados al carrito, Artículos en checkout |
+| Colores | Nombre del artículo, Variante del artículo | Artículos agregados al carrito, Artículos en checkout; y `select_color` por `color_name` |
 | Experimento | Variante (dimensión personalizada) | Sesiones, Recuento de eventos `purchase_intent` |
 
 4. Tasas de conversión: crea campos calculados, por ejemplo `Intención/Sesiones = COUNT_IF…` o, más simple, usa **Usuarios con evento** en tablas separadas por evento y divide en una tabla dinámica.
@@ -182,3 +200,10 @@ El panel `/admin/experiment` usa la medición propia. Para analizar los datos de
 6. Comparte el informe en modo **solo lectura** y, si quieres verlo en el panel, guarda el enlace en tus favoritos (no incrustes informes con datos en páginas públicas).
 
 **Opcional — Supabase en Looker Studio:** conector **PostgreSQL**, host del *Session pooler* de Supabase (Project Settings → Database → Connection string), base `postgres`. Crea antes un usuario de solo lectura en SQL Editor (`create role lector login password '…'; grant usage on schema public to lector; grant select on public.funnel_events to lector;`). No expongas la tabla `leads` (contiene correos).
+
+---
+
+## 8. Imágenes: límites de los planes
+
+- **Supabase Storage**: el plan gratuito incluye un espacio limitado de almacenamiento y transferencia mensual (revisa los valores vigentes en supabase.com/pricing). Las fotos se guardan ya optimizadas (≈ 100–500 KB cada una), así que cientos de fotos caben holgadamente.
+- **Vercel (optimización de imágenes)**: Next.js genera versiones más livianas de cada foto para cada pantalla. El plan Hobby incluye un cupo mensual limitado de optimizaciones (revisa vercel.com/pricing). Si te acercas al límite, Vercel avisa en **Usage**; para un smoke test con decenas de productos no debería ser un problema.

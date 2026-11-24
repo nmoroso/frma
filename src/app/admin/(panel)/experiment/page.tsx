@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Suspense } from "react";
-import { CAPSULE, getProductById } from "@/config/catalog";
+import { getCatalog } from "@/lib/catalog/server";
 import { ACTIVE_EXPERIMENTS } from "@/config/experiments";
 import { PRICES_VALIDATED } from "@/config/pricing";
 import { fetchEvents, fetchLeads } from "@/lib/admin-data";
@@ -10,7 +10,7 @@ import { computeMetrics, type Metrics, type TrafficFilter } from "@/lib/metrics"
 import { formatCLP } from "@/lib/format";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { getAdminUser } from "@/lib/supabase/server";
-import { LogoutButton } from "../login/LoginForm";
+import { LogoutButton } from "../../login/LoginForm";
 
 export const metadata: Metadata = { title: "Experimento", robots: { index: false, follow: false } };
 
@@ -63,7 +63,8 @@ async function Dashboard({ searchParams }: { searchParams: PageProps<"/admin/exp
     const p = new URLSearchParams({ trafico: traffic, rango: rangeKey, ...patch });
     return `/admin/experiment?${p}`;
   };
-  const name = (id: string) => (id === CAPSULE.id ? CAPSULE.name : getProductById(id)?.name ?? id);
+  const catalog = await getCatalog();
+  const name = (id: string) => catalog.collections.find((c) => c.id === id)?.name ?? catalog.products.find((p) => p.id === id)?.name ?? id;
   const empty = metrics.eventsCount === 0 && metrics.leadsConfirmed === 0;
 
   return (
@@ -139,6 +140,13 @@ async function Dashboard({ searchParams }: { searchParams: PageProps<"/admin/exp
                 formatCLP(p.intentValue),
                 p.leadsInterested,
               ])}
+            />
+          </Section>
+
+          <Section title="Preferencia por color">
+            <Table
+              head={["Producto", "Color", "Sesiones que eligieron el color", "Unidades agregadas al carrito", "Unidades en intención de compra"]}
+              rows={metrics.colors.map((c) => [name(c.productId), c.color, c.selectSessions, c.addUnits, c.intentUnits])}
             />
           </Section>
 

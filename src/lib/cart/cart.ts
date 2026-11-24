@@ -2,14 +2,16 @@
  * Carrito: lógica pura + store persistido en localStorage.
  * No genera órdenes ni pagos: solo registra la intención del visitante.
  */
-import { CAPSULE, getProductById } from "@/config/catalog";
-import type { PricedId } from "@/config/pricing";
+import { findCollection, findProduct } from "../catalog/helpers";
+import type { Catalog } from "../catalog/types";
 import { createStore, readJSON, writeJSON } from "../storage";
 
 export type CartLine = {
   key: string;
-  id: PricedId;
+  /** id del producto o del guardarropa */
+  id: string;
   kind: "product" | "capsule";
+  /** slug de la variante de color (?color=) */
   colorId?: string;
   size?: string;
   topSize?: string;
@@ -44,8 +46,9 @@ export function removeLine(lines: CartLine[], key: string): CartLine[] {
   return lines.filter((l) => l.key !== key);
 }
 
-export function subtotal(lines: CartLine[], priceOf: (id: PricedId) => number) {
-  return lines.reduce((s, l) => s + priceOf(l.id) * l.quantity, 0);
+/** priceOf(línea) → precio unitario de esa línea */
+export function subtotal(lines: CartLine[], priceOf: (line: CartLine) => number) {
+  return lines.reduce((s, l) => s + priceOf(l) * l.quantity, 0);
 }
 
 export function count(lines: CartLine[]) {
@@ -56,15 +59,23 @@ function clampQty(q: number) {
   return Math.max(1, Math.min(MAX_QTY, Math.floor(q) || 1));
 }
 
-/** Descarta líneas que ya no existen en el catálogo (p. ej. si se editó la config). */
-export function sanitize(lines: unknown): CartLine[] {
+/**
+ * Descarta líneas que ya no se pueden comprar: producto despublicado, color
+ * inactivo o talla que ya no existe para ese color.
+ */
+export function sanitize(lines: unknown, catalog: Catalog): CartLine[] {
   if (!Array.isArray(lines)) return [];
   return lines.filter((l): l is CartLine => {
     if (!l || typeof l !== "object") return false;
     const line = l as CartLine;
-    if (line.id === CAPSULE.id) return Boolean(line.topSize && line.bottomSize);
-    const p = getProductById(line.id);
-    return Boolean(p && p.colors.some((c) => c.id === line.colorId) && p.sizes.includes(line.size ?? ""));
+    if (typeof line.quantity !== "number" || typeof line.key !== "string") return false;
+    if (line.kind === "capsule") {
+      const c = findCollection(catalog, line.id);
+      return Boolean(c && line.topSize && line.bottomSize && c.topSizes.includes(line.topSize) && c.bottomSizes.includes(line.bottomSize));
+    }
+    const p = findProduct(catalog, line.id);
+    const v = p?.variants.find((x) => x.slug === line.colorId && x.active);
+    return Boolean(v && v.sizes.includes(line.size ?? ""));
   });
 }
 
@@ -73,8 +84,8 @@ export function sanitize(lines: unknown): CartLine[] {
 export const cartStore = createStore<CartLine[]>([]);
 export const cartReadyStore = createStore(false);
 
-export function hydrateCart() {
-  cartStore.set(sanitize(readJSON(KEY, [])));
+export function hydrateCart(catalog: Catalog) {
+  cartStore.set(sanitize(readJSON(KEY, []), catalog));
   cartReadyStore.set(true);
 }
 

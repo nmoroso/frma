@@ -1,5 +1,6 @@
 import Image from "next/image";
-import type { GarmentShape, ProductImage } from "@/config/catalog";
+import { isLight } from "@/lib/catalog/helpers";
+import type { CatalogImage, GarmentShape } from "@/lib/catalog/types";
 
 /**
  * Muestra la foto del producto si existe en el catálogo; si no, una
@@ -18,7 +19,7 @@ export function ProductVisual({
 }: {
   shape: GarmentShape;
   hex: string;
-  image?: ProductImage;
+  image?: CatalogImage | null;
   alt: string;
   className?: string;
   label?: boolean;
@@ -31,7 +32,7 @@ export function ProductVisual({
       className={`relative overflow-hidden ${light ? "bg-sand" : "bg-ivory"} ${className}`}
     >
       {image ? (
-        <Image src={image.src} alt={image.alt || alt} fill sizes={sizes} priority={priority} className="object-cover" />
+        <Image src={image.src} alt={image.alt || alt} fill sizes={sizes} preload={priority} quality={85} className="object-cover" />
       ) : (
         <Garment shape={shape} hex={hex} title={alt} />
       )}
@@ -115,11 +116,3 @@ const TEE =
 const SHIRT =
   "M60 38 L84 28 L100 44 L116 28 L140 38 L162 62 L178 186 L160 190 L142 96 L142 210 Q100 216 58 210 L58 96 L40 190 L22 186 L38 62 Z";
 const CHINO = "M64 30 L136 30 L144 212 L110 214 L100 94 L90 214 L56 212 Z";
-
-export function isLight(hex: string) {
-  const n = parseInt(hex.replace("#", ""), 16);
-  const r = (n >> 16) & 255,
-    g = (n >> 8) & 255,
-    b = n & 255;
-  return 0.299 * r + 0.587 * g + 0.114 * b > 170;
-}

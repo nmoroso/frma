@@ -2,10 +2,13 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { getColor, type Product } from "@/config/catalog";
+import { activeVariants, pickVariant, shapeFor, variantBasePrice } from "@/lib/catalog/helpers";
+import type { Product } from "@/lib/catalog/types";
 import { productItem } from "@/lib/analytics/items";
+import { trackSelectColor } from "@/lib/analytics/color";
 import { track } from "@/lib/analytics/track";
 import { usePrice } from "@/lib/hooks";
+import { ColorSwatches } from "./ColorSwatches";
 import { Price } from "./Price";
 import { ProductVisual } from "./ProductVisual";
 
@@ -15,62 +18,71 @@ export function ProductCard({
   product,
   list,
   index,
-  initialColorId,
+  initialColor,
 }: {
   product: Product;
   list: ListInfo;
   index: number;
-  initialColorId?: string;
+  initialColor?: string;
 }) {
-  const [colorId, setColorId] = useState(initialColorId ?? product.colors[0].id);
-  const color = getColor(product, colorId);
-  const price = usePrice(product.id);
-  const href = `/producto/${product.slug}?color=${color.id}`;
+  const variants = activeVariants(product);
+  const [slug, setSlug] = useState(pickVariant(product, initialColor)?.slug ?? "");
+  const variant = pickVariant(product, slug);
+  const base = variantBasePrice(product, variant);
+  const price = usePrice(product.id, base);
+  if (!variant) return null;
+  const href = `/producto/${product.id}?color=${variant.slug}`;
+  const image = variant.images[0];
+  const hover = variant.images[1];
 
   const onSelect = () => {
     if (price === null) return;
     track("select_item", {
       item_list_id: list.id,
       item_list_name: list.name,
-      items: [productItem(product, price, { colorId: color.id, list, index })],
+      items: [productItem(product, variant, price, { list, index })],
     });
   };
 
   return (
     <article className="group">
-      <Link href={href} onClick={onSelect} className="block">
+      <Link href={href} onClick={onSelect} className="relative block">
         <ProductVisual
-          shape={product.shape}
-          hex={color.hex}
-          image={color.images[0]}
-          alt={`${product.name} ${color.name}`}
-          className="aspect-[4/5] transition-transform duration-500"
+          shape={shapeFor(product.category)}
+          hex={variant.hex}
+          image={image}
+          alt={`${product.name} ${variant.name}`}
+          className="aspect-[4/5]"
         />
+        {hover && (
+          <div className="absolute inset-0 opacity-0 transition-opacity duration-500 group-hover:opacity-100" aria-hidden>
+            <ProductVisual shape={shapeFor(product.category)} hex={variant.hex} image={hover} alt="" className="h-full w-full" />
+          </div>
+        )}
       </Link>
       <div className="mt-3 flex items-start justify-between gap-3">
         <div>
           <Link href={href} onClick={onSelect} className="text-sm font-medium hover:underline">
             {product.name}
           </Link>
-          <p className="mt-0.5 text-xs text-muted">{color.name}</p>
+          <p className="mt-0.5 text-xs text-muted">{variant.name}</p>
         </div>
-        <Price id={product.id} className="text-sm" />
+        <Price id={product.id} base={base} className="text-sm" />
       </div>
-      <div className="mt-2 flex gap-1.5" role="radiogroup" aria-label={`Colores de ${product.name}`}>
-        {product.colors.map((c) => (
-          <button
-            key={c.id}
-            type="button"
-            role="radio"
-            aria-checked={c.id === color.id}
-            aria-label={c.name}
-            title={c.name}
-            onClick={() => setColorId(c.id)}
-            className={`h-5 w-5 rounded-full border transition ${c.id === color.id ? "ring-1 ring-ink ring-offset-2" : "border-line"}`}
-            style={{ backgroundColor: c.hex }}
+      {variants.length > 1 && (
+        <div className="mt-2">
+          <ColorSwatches
+            variants={variants}
+            selected={variant.slug}
+            size="sm"
+            label={`Colores de ${product.name}`}
+            onSelect={(v) => {
+              trackSelectColor(product, v, variant.slug, list);
+              setSlug(v.slug);
+            }}
           />
-        ))}
-      </div>
+        </div>
+      )}
     </article>
   );
 }

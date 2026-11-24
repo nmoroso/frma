@@ -9,10 +9,13 @@
     "lint": "eslint",
     "test": "vitest run",
     "test:e2e": "node tests/e2e/smoke.mjs",
-    "typecheck": "next typegen && tsc --noEmit"
+    "typecheck": "next typegen && tsc --noEmit",
+    "test:e2e:admin": "node tests/e2e/admin.mjs"
   },
   "dependencies": {
+    "@supabase/postgrest-js": "^2.119.2",
     "@supabase/ssr": "^0.12.7",
+    "@supabase/storage-js": "^2.119.2",
     "@supabase/supabase-js": "^2.119.2",
     "next": "16.4.6",
     "react": "19.3.0",

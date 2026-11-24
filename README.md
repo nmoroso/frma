@@ -4,6 +4,8 @@
 
 > Mensaje principal: **"Tu ropero, resuelto"**.
 
+> **Novedad (v2): panel de administración en `/admin`.** Productos, colores, fotos, modelos, guardarropas e imágenes del inicio se gestionan sin tocar código y sin volver a desplegar. Guía completa: **[docs/PANEL-ADMIN.md](docs/PANEL-ADMIN.md)**.
+
 ---
 
 ## Índice
@@ -34,7 +36,8 @@
 | Checkout | `/checkout` | Resumen, despacho "Por confirmar", botón **Continuar con mi pedido** |
 | Prelanzamiento | `/prelanzamiento` | Explica que FRMA aún no recibe pedidos ni pagos + registro voluntario |
 | Privacidad / Contacto | `/privacidad`, `/contacto` | Textos base (pendientes de revisión legal) |
-| Panel | `/admin/experiment` | Métricas reales del embudo y exportación de leads (requiere inicio de sesión) |
+| Panel de administración | `/admin` | Productos, colores, fotos, modelos, guardarropas e imágenes del inicio (requiere inicio de sesión) |
+| Resultados | `/admin/experiment` | Métricas reales del embudo, preferencia por color y exportación de leads |
 
 Además: banner de cookies (nada de analítica/publicidad se activa sin permiso), GA4 + Meta Pixel + Clarity, atribución UTM, registro de leads en Supabase con anti-spam, estructura de pruebas A/B desactivada.
 
@@ -70,15 +73,19 @@ Abre http://localhost:3000. El sitio funciona aunque `.env.local` esté vacío: 
 
 ## 3. Editar productos, precios y fotos
 
-**No necesitas tocar componentes.** Todo está en `src/config/`:
+**Desde la versión 2 se hace en el panel `/admin`**, sin código: crear, editar, duplicar, publicar y ordenar productos; colores con selector, cuentagotas, SKU, tallas, precio y fotos propias; biblioteca de imágenes; modelos; guardarropas; imágenes del inicio. Paso a paso en **[docs/PANEL-ADMIN.md](docs/PANEL-ADMIN.md)**.
 
-| Archivo | Qué cambias ahí |
+Primera vez: ejecuta `supabase/schema.sql`, crea tu usuario administrador, entra a `/admin` y presiona **Importar catálogo inicial** (copia los 4 productos, 9 colores, FRMA 01 y 3 modelos actuales a la base de datos).
+
+Lo que sigue en archivos de configuración:
+
+| Archivo | Qué contiene |
 |---|---|
-| `src/config/pricing.ts` | **Precios** (en CLP, sin puntos) y la bandera `PRICES_VALIDATED` |
-| `src/config/catalog.ts` | Productos, colores, tallas, descripciones, materiales, fotos y composición de FRMA 01 |
-| `src/config/home.ts` | Textos e imagen del inicio |
+| `src/config/catalog.ts` | Catálogo **inicial** (se usa para importar y como respaldo si Supabase no está configurado), categorías y grupos de tallas del panel |
+| `src/config/pricing.ts` | Precios del catálogo inicial y la bandera `PRICES_VALIDATED` |
+| `src/config/home.ts` | Textos del inicio (las imágenes se cambian en el panel) |
 | `src/config/site.ts` | Correo de contacto, barra superior, textos de despacho, texto de consentimiento |
-| `src/config/experiments.ts` | Pruebas A/B (desactivadas) |
+| `src/config/experiments.ts` | Pruebas A/B (desactivadas). Los precios de prueba usan el id del producto o guardarropa |
 
 ### Precios (importante antes de pagar anuncios)
 
@@ -92,21 +99,11 @@ Los precios actuales son **hipótesis** no validadas con proveedores:
 | Camisa Oxford | $34.990 |
 | FRMA 01 (7 piezas) | $179.990 (por separado: $204.930) |
 
-Cuando los confirmes, edita `PRICES` en `src/config/pricing.ts` y cambia `PRICES_VALIDATED = true`. El panel muestra una advertencia mientras sea `false`.
+Cámbialos en el panel (producto, color o guardarropa). Cuando estén validados, cambia `PRICES_VALIDATED = true` en `src/config/pricing.ts` para quitar la advertencia del panel de resultados.
 
 ### Fotos
 
-1. Copia tus imágenes (JPG/WebP, idealmente 1600×2000 px, formato vertical 4:5) a `public/images/productos/`.
-2. En `src/config/catalog.ts`, dentro del color correspondiente, agrega:
-   ```ts
-   images: [
-     { src: "/images/productos/polera-blanco-1.jpg", alt: "Polera Essential blanca, vista frontal", conceptual: true },
-   ],
-   ```
-3. `conceptual: true` muestra la etiqueta **"Imagen conceptual"** (úsalo para imágenes generadas con IA o renders).
-4. Si un color no tiene fotos se muestra una ilustración neutra rotulada "Ilustración · fotografía próximamente".
-
-Para la cápsula usa `CAPSULE.heroImage` y para el inicio `HOME.hero.image`. **Nunca uses fotos de productos de otras marcas.**
+Se suben en el panel (arrastrar y soltar, varias a la vez) y se optimizan automáticamente. Cada color tiene su propia galería y la tienda muestra **solo** las fotos del color elegido. Marca como **IA** las imágenes generadas con inteligencia artificial: la tienda las rotula "Imagen conceptual". **Nunca uses fotos de productos de otras marcas.**
 
 ---
 
@@ -119,7 +116,7 @@ La guía detallada, con cada clic, está en **[docs/GUIA-INTEGRACIONES.md](docs/
 | Google Analytics 4 | `NEXT_PUBLIC_GA4_ID` | Embudo, campañas, Looker Studio |
 | Meta Pixel | `NEXT_PUBLIC_META_PIXEL_ID` | Optimizar y medir anuncios de Instagram |
 | Microsoft Clarity | `NEXT_PUBLIC_CLARITY_ID` | Mapas de calor y grabaciones |
-| Supabase | `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` | Leads, medición propia y login del panel |
+| Supabase | `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` | Catálogo, fotos (Storage), leads, medición propia y login del panel |
 | Panel | `ADMIN_EMAILS` | Correos autorizados en `/admin` |
 
 Si una variable falta o tiene un formato inválido, esa integración simplemente no se carga y el sitio sigue funcionando.
@@ -139,13 +136,13 @@ Si una variable falta o tiene un formato inválido, esa integración simplemente
 
 ---
 
-## 6. Panel del experimento y leads
+## 6. Resultados del experimento y leads
 
 `/admin/experiment` muestra datos **reales** (nunca simulados) desde Supabase:
 
 - Visitantes únicos y sesiones
 - Embudo: visitas → vieron producto → carrito → checkout → intención final → correo, con tasas entre etapas
-- Desglose por fuente/campaña (UTM), por producto y cápsula, y por variante A/B
+- Desglose por fuente/campaña (UTM), por producto y cápsula, **por color** y por variante A/B
 - Filtro **Real / Interno / Todo** y periodo (7, 30, 90 días, todo)
 - Botón **Descargar CSV** de leads
 
@@ -186,7 +183,7 @@ El sitio guarda la primera y la última campaña (y el `fbclid`) en el navegador
 npm test
 ```
 
-Pruebas unitarias (Vitest): catálogo y cápsula, carrito, precios por experimento, parámetros GA4, mapeo a Meta (nunca `Purchase`), UTM, validación de leads, métricas y CSV.
+Pruebas unitarias (Vitest): catálogo inicial y migración, variantes de color, carrito por color/talla, precios por color y por experimento, parámetros GA4 (`select_color`, `item_variant`), mapeo a Meta (nunca `Purchase`), UTM, validación de leads y del panel (productos, HEX, SKU, fotos, enlaces), métricas (incluida preferencia por color) y CSV.
 
 ```bash
 npm run lint
@@ -212,6 +209,8 @@ BASE_URL=http://localhost:3100 npm run test:e2e
 
 Verifica: nada se carga antes del consentimiento, rechazar bloquea todo, embudo completo con eventos y parámetros correctos, Meta sin `Purchase`, ningún correo en eventos, sin scroll horizontal en móvil, panel y CSV protegidos. (Requiere `npm i -D playwright && npx playwright install chromium` en tu computador.)
 
+Prueba de extremo a extremo del **panel** (contra un Supabase de pruebas, nunca producción): ver [docs/PANEL-ADMIN.md §10](docs/PANEL-ADMIN.md#10-pruebas-automáticas-del-panel-para-quien-mantenga-el-código).
+
 Checklist manual: **[docs/QA-CHECKLIST.md](docs/QA-CHECKLIST.md)**.
 
 ---
@@ -220,23 +219,27 @@ Checklist manual: **[docs/QA-CHECKLIST.md](docs/QA-CHECKLIST.md)**.
 
 ```
 src/
-  config/            ← TODO lo editable (catálogo, precios, textos, experimentos)
+  config/            ← catálogo inicial, precios iniciales, textos, experimentos
   app/               ← páginas (App Router) y API
+    admin/(panel)/   ← panel: productos, modelos, imágenes, guardarropas, inicio, resultados
+    admin/actions.ts ← acciones del panel (verifican administrador en cada llamada)
     api/leads        ← POST registro de interés → Supabase
     api/events       ← POST medición propia (solo con consentimiento)
     api/admin/leads  ← GET CSV (solo administradores)
-    admin/           ← login + panel
-  components/        ← UI reutilizable (tarjetas, visuales, formulario, banner…)
+  components/        ← UI de la tienda (tarjetas, círculos de color…) y del panel (components/admin)
   lib/
+    catalog/         ← catálogo desde Supabase con caché (se renueva al guardar en el panel)
+    admin/           ← validaciones, datos del panel, subida y optimización de fotos
     analytics/       ← consentimiento, atribución, eventos GA4/Meta, carga de scripts
-    cart/            ← lógica del carrito (localStorage)
+    cart/            ← carrito por producto + color + talla (localStorage)
     experiments.ts   ← asignación de variantes
-    metrics.ts       ← cálculo del embudo para el panel
-    leads/validate.ts← validación + anti-spam
+    metrics.ts       ← cálculo del embudo para el panel de resultados
   proxy.ts           ← renueva la sesión del panel (/admin)
-supabase/schema.sql  ← tablas leads y funnel_events (con RLS)
-tests/               ← unitarios + e2e
+supabase/schema.sql  ← tablas (leads, eventos, catálogo, fotos, modelos…), bucket de fotos y permisos
+tests/               ← unitarios + e2e (tienda y panel)
 ```
+
+**Cómo se actualiza la tienda sin redeploy:** el catálogo se lee de Supabase y se guarda en caché; cada vez que guardas en el panel, el servidor invalida esa caché (`updateTag`) y la siguiente visita ve los cambios. Como respaldo, la caché se renueva cada 5 minutos.
 
 Flujo de un evento: componente → `track()` → si hay consentimiento: GA4 (`gtag`), Meta (`fbq`, solo eventos mapeados), Clarity (`clarity("event")`) y `/api/events` (Supabase). Sin decisión de cookies, los eventos esperan en memoria y solo se envían si el visitante acepta.
 
@@ -244,6 +247,7 @@ Flujo de un evento: componente → `track()` → si hay consentimiento: GA4 (`gt
 
 ## 11. Documentos adicionales
 
+- **[docs/PANEL-ADMIN.md](docs/PANEL-ADMIN.md)**: cómo usar el panel de administración.
 - **[docs/GUIA-INTEGRACIONES.md](docs/GUIA-INTEGRACIONES.md)**: crear cuentas, obtener IDs, configurar eventos y conversiones, verificar, Looker Studio.
 - **[docs/QA-CHECKLIST.md](docs/QA-CHECKLIST.md)**: checklist antes de lanzar.
 - **[docs/PENDIENTES-LANZAMIENTO.md](docs/PENDIENTES-LANZAMIENTO.md)**: lo que debes confirmar antes de invertir en campañas (incluye revisión legal).

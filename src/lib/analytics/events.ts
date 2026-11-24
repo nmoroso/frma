@@ -9,6 +9,7 @@ export const EVENT_NAMES = [
   "view_item_list",
   "select_item",
   "view_item",
+  "select_color",
   "add_to_cart",
   "remove_from_cart",
   "view_cart",
@@ -29,6 +30,8 @@ export type EventInput = {
   page_path?: string;
   page_location?: string;
   page_title?: string;
+  /** Solo select_color */
+  color?: { product_id: string; product_name: string; variant_id: string; color_name: string };
 };
 
 export type CommonParams = Record<string, string | number | boolean | undefined>;
@@ -61,6 +64,12 @@ export function buildGa4Params(name: EventName, input: EventInput, common: Commo
       params.value = input.value ?? itemsValue(input.items);
     }
   }
+  if (name === "select_color" && input.color) {
+    params.product_id = input.color.product_id;
+    params.product_name = input.color.product_name;
+    params.variant_id = input.color.variant_id;
+    params.color_name = input.color.color_name;
+  }
   if (name === "generate_lead") {
     params.currency = "CLP";
     params.value = 0;
@@ -77,7 +86,7 @@ export type MetaCall = { method: "track" | "trackCustom"; event: string; params:
  */
 export function toMetaCall(name: EventName, input: EventInput, common: CommonParams): MetaCall | null {
   const items = input.items ?? [];
-  const exp = pick(common, ["experiment_id", "variant_id", "traffic_type"]);
+  const exp = pick(common, ["experiment_id", "variant_id", "experiment_variant_id", "traffic_type"]);
   const commerce = {
     content_ids: items.map((i) => i.item_id),
     content_type: "product",

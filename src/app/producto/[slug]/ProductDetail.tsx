@@ -1,41 +1,53 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { CAPSULE, getColor, getProductBySlug } from "@/config/catalog";
+import { activeVariants, findProduct, pickVariant, shapeFor, variantBasePrice } from "@/lib/catalog/helpers";
+import { useCatalog } from "@/lib/catalog/context";
 import { productItem } from "@/lib/analytics/items";
+import { trackSelectColor } from "@/lib/analytics/color";
 import { track } from "@/lib/analytics/track";
 import { addToCart } from "@/lib/cart/actions";
 import { usePrice } from "@/lib/hooks";
+import { ColorSwatches } from "@/components/product/ColorSwatches";
 import { Price } from "@/components/product/Price";
 import { ProductVisual } from "@/components/product/ProductVisual";
 import { QuantityInput } from "@/components/ui/QuantityInput";
 
-export function ProductDetail({ slug }: { slug: string }) {
-  const product = getProductBySlug(slug)!;
+export function ProductDetail({ productId }: { productId: string }) {
+  const catalog = useCatalog();
+  const product = findProduct(catalog, productId)!;
   const params = useSearchParams();
-  const router = useRouter();
-  const pathname = usePathname();
-  const color = getColor(product, params.get("color") ?? undefined);
-  const price = usePrice(product.id);
-  const [size, setSize] = useState<string>("");
+  const [slug, setSlug] = useState(() => pickVariant(product, params.get("color"))?.slug ?? "");
+  const variant = pickVariant(product, slug)!;
+  const variants = activeVariants(product);
+  const base = variantBasePrice(product, variant);
+  const price = usePrice(product.id, base);
+  const [size, setSize] = useState("");
   const [qty, setQty] = useState(1);
   const [error, setError] = useState("");
   const [added, setAdded] = useState(false);
   const [active, setActive] = useState(0);
   const viewed = useRef(false);
 
+  // view_item una sola vez por visita a la ficha, con el color mostrado.
   useEffect(() => {
     if (price === null || viewed.current) return;
     viewed.current = true;
-    track("view_item", { items: [productItem(product, price, { colorId: color.id })] });
-  }, [price, product, color.id]);
+    track("view_item", { items: [productItem(product, variant, price)] });
+  }, [price, product, variant]);
 
-  const selectColor = (id: string) => {
+  const selectColor = (v: typeof variant) => {
+    trackSelectColor(product, v, variant.slug);
+    setSlug(v.slug);
     setActive(0);
     setAdded(false);
-    router.replace(`${pathname}?color=${id}`, { scroll: false });
+    if (size && !v.sizes.includes(size)) setSize("");
+    // Misma página: solo actualizamos la URL para poder compartir el color.
+    const url = new URL(window.location.href);
+    url.searchParams.set("color", v.slug);
+    window.history.replaceState(null, "", url);
   };
 
   const onAdd = () => {
@@ -45,12 +57,17 @@ export function ProductDetail({ slug }: { slug: string }) {
     }
     if (price === null) return;
     setError("");
-    addToCart({ id: product.id, kind: "product", colorId: color.id, size, quantity: qty }, price);
+    addToCart(
+      { id: product.id, kind: "product", colorId: variant.slug, size, quantity: qty },
+      productItem(product, variant, price, { size, quantity: qty }),
+    );
     setAdded(true);
   };
 
-  const images = color.images;
-  const current = images[active];
+  const images = variant.images;
+  const current = images[active] ?? images[0];
+  const shape = shapeFor(product.category);
+  const inCollection = catalog.collections.find((c) => c.pieces.some((p) => p.productId === product.id));
 
   return (
     <div className="container-frma pt-6 sm:pt-10">
@@ -59,23 +76,31 @@ export function ProductDetail({ slug }: { slug: string }) {
         <span className="text-ink">{product.name}</span>
       </nav>
       <div className="grid gap-8 lg:grid-cols-[1.25fr_1fr] lg:gap-16">
-        {/* Galería */}
+        {/* Galería: solo las fotos del color seleccionado */}
         <div>
           <ProductVisual
-            shape={product.shape}
-            hex={color.hex}
+            key={current?.src ?? variant.id}
+            shape={shape}
+            hex={variant.hex}
             image={current}
-            alt={`${product.name} ${color.name}`}
+            alt={current?.alt || `${product.name} ${variant.name}`}
             className="aspect-[4/5] w-full"
             label
             priority
             sizes="(min-width: 1024px) 55vw, 100vw"
           />
           {images.length > 1 && (
-            <div className="mt-2 grid grid-cols-5 gap-2">
+            <div className="mt-2 grid grid-cols-5 gap-2" aria-label="Fotos del producto">
               {images.map((img, i) => (
-                <button key={img.src} type="button" onClick={() => setActive(i)} aria-label={`Ver imagen ${i + 1}`} className={i === active ? "ring-1 ring-ink" : ""}>
-                  <ProductVisual shape={product.shape} hex={color.hex} image={img} alt={img.alt} className="aspect-square" sizes="10vw" />
+                <button
+                  key={`${variant.id}-${img.src}`}
+                  type="button"
+                  onClick={() => setActive(i)}
+                  aria-label={`Ver foto ${i + 1} de ${images.length}`}
+                  aria-current={i === active}
+                  className={`outline-offset-2 ${i === active ? "ring-1 ring-ink" : "opacity-80 hover:opacity-100"}`}
+                >
+                  <ProductVisual shape={shape} hex={variant.hex} image={img} alt="" className="aspect-[4/5]" sizes="12vw" />
                 </button>
               ))}
             </div>
@@ -84,28 +109,19 @@ export function ProductDetail({ slug }: { slug: string }) {
 
         {/* Información */}
         <div className="lg:sticky lg:top-28 lg:self-start">
-          <p className="eyebrow">{product.tagline}</p>
+          {product.tagline && <p className="eyebrow">{product.tagline}</p>}
           <h1 className="mt-3 text-3xl font-light tracking-tight sm:text-4xl">{product.name}</h1>
-          <p className="mt-3 text-xl"><Price id={product.id} /></p>
+          <p className="mt-3 text-xl"><Price id={product.id} base={base} /></p>
 
           <div className="mt-8">
-            <p className="text-sm">
-              Color: <span className="text-muted">{color.name}</span>
+            <p className="text-sm" aria-live="polite">
+              Color: <span className="text-muted">{variant.name}</span>
             </p>
-            <div className="mt-3 flex gap-2" role="radiogroup" aria-label="Color">
-              {product.colors.map((c) => (
-                <button
-                  key={c.id}
-                  type="button"
-                  role="radio"
-                  aria-checked={c.id === color.id}
-                  aria-label={c.name}
-                  onClick={() => selectColor(c.id)}
-                  className={`h-9 w-9 rounded-full border border-line ${c.id === color.id ? "ring-1 ring-ink ring-offset-2" : ""}`}
-                  style={{ backgroundColor: c.hex }}
-                />
-              ))}
-            </div>
+            {variants.length > 0 && (
+              <div className="mt-3">
+                <ColorSwatches variants={variants} selected={variant.slug} onSelect={selectColor} label="Color" size="lg" />
+              </div>
+            )}
           </div>
 
           <div className="mt-8">
@@ -114,7 +130,7 @@ export function ProductDetail({ slug }: { slug: string }) {
               <span className="text-xs text-muted">Guía de tallas: pendiente</span>
             </div>
             <div className="mt-3 grid grid-cols-5 gap-2 sm:grid-cols-6" role="radiogroup" aria-label="Talla">
-              {product.sizes.map((s) => (
+              {variant.sizes.map((s) => (
                 <button
                   key={s}
                   type="button"
@@ -142,35 +158,41 @@ export function ProductDetail({ slug }: { slug: string }) {
           </div>
           {added && (
             <div className="mt-4 flex items-center justify-between border border-line bg-ivory p-4 text-sm" role="status">
-              <span>Agregado al carrito.</span>
+              <span>Agregado al carrito: {variant.name}, talla {size}.</span>
               <Link href="/carrito" className="link-underline font-medium">Ver carrito</Link>
             </div>
           )}
 
-          <div className="mt-10 border-t border-line pt-6">
-            <p className="leading-relaxed text-ink/85">{product.description}</p>
-          </div>
+          {product.description && (
+            <div className="mt-10 border-t border-line pt-6">
+              <p className="whitespace-pre-line leading-relaxed text-ink/85">{product.description}</p>
+            </div>
+          )}
 
           <dl className="mt-6 divide-y divide-line border-y border-line text-sm">
-            {product.details.map((d) => (
-              <div key={d.label} className="flex justify-between gap-4 py-3">
-                <dt className="text-muted">{d.label}</dt>
-                <dd className={d.value.toLowerCase().includes("pendiente") ? "text-muted italic" : ""}>{d.value}</dd>
-              </div>
-            ))}
-            <div className="flex justify-between gap-4 py-3">
-              <dt className="text-muted">Cuidados</dt>
-              <dd className={product.care.toLowerCase().includes("pendiente") ? "text-muted italic" : ""}>{product.care}</dd>
-            </div>
+            {[
+              ["Material y composición", product.material],
+              ["Características y calce", product.fit],
+              ["Cuidados", product.care],
+            ]
+              .filter(([, v]) => v)
+              .map(([label, value]) => (
+                <div key={label} className="flex justify-between gap-6 py-3">
+                  <dt className="shrink-0 text-muted">{label}</dt>
+                  <dd className={`text-right ${value.toLowerCase().includes("pendiente") ? "italic text-muted" : ""}`}>{value}</dd>
+                </div>
+              ))}
           </dl>
 
-          <Link href="/frma-01" className="mt-8 block bg-ivory p-5 text-sm hover:bg-sand/60">
-            <span className="eyebrow">Ahorra con la cápsula</span>
-            <span className="mt-2 block">
-              {product.name} es parte de <strong className="font-medium">{CAPSULE.name}</strong>: 7 piezas que combinan entre sí.
-            </span>
-            <span className="link-underline mt-2 inline-block">Ver {CAPSULE.name}</span>
-          </Link>
+          {inCollection && (
+            <Link href={inCollection.id === "frma-01" ? "/frma-01" : `/guardarropa/${inCollection.id}`} className="mt-8 block bg-ivory p-5 text-sm hover:bg-sand/60">
+              <span className="eyebrow">Ahorra con la cápsula</span>
+              <span className="mt-2 block">
+                {product.name} es parte de <strong className="font-medium">{inCollection.name}</strong>: piezas que combinan entre sí.
+              </span>
+              <span className="link-underline mt-2 inline-block">Ver {inCollection.name}</span>
+            </Link>
+          )}
         </div>
       </div>
     </div>

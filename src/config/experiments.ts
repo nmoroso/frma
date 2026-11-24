@@ -12,13 +12,14 @@
  *
  * Todos los eventos de analítica incluyen `experiment_id` y `variant_id`.
  */
-import type { PricedId } from "./pricing";
-
 export type Variant = {
   id: string;
   weight: number;
-  /** Sobrescribe precios para esta variante (solo experimentos de tipo "price"). */
-  prices?: Partial<Record<PricedId, number>>;
+  /**
+   * Sobrescribe precios para esta variante (solo experimentos de tipo "price").
+   * Clave = id del producto o del guardarropa (ver /admin, p. ej. "frma-01").
+   */
+  prices?: Record<string, number>;
   /** Sobrescribe textos del hero (solo experimentos de tipo "message"). */
   hero?: { title?: string; subtitle?: string };
 };

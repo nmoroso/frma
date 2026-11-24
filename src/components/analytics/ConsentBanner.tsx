@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { useState } from "react";
 import { clearTrackingCookies, preferencesOpenStore, saveConsent } from "@/lib/analytics/consent";
 import { anyLoaded } from "@/lib/analytics/vendors";
@@ -9,6 +10,8 @@ import { useConsent, usePreferencesOpen } from "@/lib/hooks";
 export function ConsentBanner() {
   const consent = useConsent();
   const open = usePreferencesOpen();
+  const pathname = usePathname();
+  if (pathname?.startsWith("/admin")) return null; // el panel no usa cookies de medición
   if (!(consent === null || open)) return null;
   // `key` reinicia el estado del panel cada vez que se abre desde "Preferencias de cookies".
   return (

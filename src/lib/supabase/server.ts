@@ -1,6 +1,7 @@
 import "server-only";
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
+import { connection } from "next/server";
 import { supabasePublicConfig } from "./public";
 
 /** Lista de correos autorizados para el panel (variable ADMIN_EMAILS, separada por comas). */
@@ -18,6 +19,8 @@ export function adminEmails() {
 export async function getAdminUser(): Promise<{ email: string } | null> {
   const cfg = supabasePublicConfig();
   if (!cfg) return null;
+  // La sesión se valida siempre en tiempo de solicitud (nunca en un prerender).
+  await connection();
   const store = await cookies();
   const supabase = createServerClient(cfg.url, cfg.anonKey, {
     cookies: {
@@ -35,4 +38,12 @@ export async function getAdminUser(): Promise<{ email: string } | null> {
   const email = data.user?.email?.toLowerCase();
   if (error || !email) return null;
   return adminEmails().includes(email) ? { email } : null;
+}
+
+/** Para páginas del panel: redirige al login si no eres administrador. */
+export async function requireAdminPage() {
+  const { redirect } = await import("next/navigation");
+  const admin = await getAdminUser();
+  if (!admin) redirect("/admin/login");
+  return admin;
 }

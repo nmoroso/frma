@@ -2,11 +2,11 @@
 
 import { useSyncExternalStore } from "react";
 import { HAS_MESSAGE_EXPERIMENT, HAS_PRICE_EXPERIMENT } from "@/config/experiments";
-import type { PricedId } from "@/config/pricing";
-import { PRICES } from "@/config/pricing";
-import { cartReadyStore, cartStore } from "./cart/cart";
+import { cartReadyStore, cartStore, type CartLine } from "./cart/cart";
 import { consentStore, preferencesOpenStore } from "./analytics/consent";
 import { getAssignments, resolvePrice } from "./experiments";
+import { useCatalog } from "./catalog/context";
+import { lineInfo } from "./cart/lines";
 
 const noop = () => () => {};
 
@@ -32,24 +32,36 @@ export function useAssignments() {
   return useSyncExternalStore(noop, getAssignments, () => null);
 }
 
+/** Función de precio: (id de producto o guardarropa, precio base) → precio a mostrar. */
+export type PriceOf = (id: string, base: number) => number;
+
 /**
- * Precio a mostrar. Si hay un experimento de precio activo, devuelve null hasta
- * conocer la variante del visitante (así nunca ve dos precios distintos).
+ * Si hay un experimento de precio activo, devuelve null hasta conocer la
+ * variante del visitante (así nunca ve dos precios distintos).
  */
-export function usePrice(id: PricedId): number | null {
+export function usePriceOf(): PriceOf | null {
   const assignments = useAssignments();
-  if (!HAS_PRICE_EXPERIMENT) return PRICES[id];
-  return assignments ? resolvePrice(id, assignments) : null;
+  if (!HAS_PRICE_EXPERIMENT) return (_id, base) => base;
+  return assignments ? (id, base) => resolvePrice(id, base, assignments) : null;
 }
 
-/** Función de precio para listas (carrito, cápsula). */
-export function usePriceFn(): ((id: PricedId) => number) | null {
-  const assignments = useAssignments();
-  if (!HAS_PRICE_EXPERIMENT) return (id) => PRICES[id];
-  return assignments ? (id) => resolvePrice(id, assignments) : null;
+export function usePrice(id: string, base: number): number | null {
+  const priceOf = usePriceOf();
+  return priceOf ? priceOf(id, base) : null;
 }
 
 export function useMessageReady() {
   const assignments = useAssignments();
   return !HAS_MESSAGE_EXPERIMENT || assignments !== null;
+}
+
+/** Precio unitario de una línea del carrito (null mientras se resuelve un experimento). */
+export function useLinePrice(): ((line: CartLine) => number) | null {
+  const catalog = useCatalog();
+  const priceOf = usePriceOf();
+  if (!priceOf) return null;
+  return (line) => {
+    const info = lineInfo(line, catalog);
+    return info ? priceOf(line.id, info.base) : 0;
+  };
 }
